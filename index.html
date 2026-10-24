@@ -1137,13 +1137,14 @@ cv.addEventListener('pointerdown', (e)=>{
   Sfx.init();
   const r = cv.getBoundingClientRect();
   const x = e.clientX - r.left, y = e.clientY - r.top;
+  if(shopT < 0.15 && shopBtn && x > shopBtn.x && x < shopBtn.x+shopBtn.w && y > shopBtn.y && y < shopBtn.y+shopBtn.h){
+    offlineReport = null; save();
+    shopOpen = true; Sfx.beep(520,0.07,'square',0.05); layoutShop(); return;
+  }
   if(offlineReport && offlineReport.btn){
     const b = offlineReport.btn;
     if(x > b.x && x < b.x+b.w && y > b.y && y < b.y+b.h){ offlineReport = null; save(); return; }
     return;
-  }
-  if(shopT < 0.15 && shopBtn && x > shopBtn.x && x < shopBtn.x+shopBtn.w && y > shopBtn.y && y < shopBtn.y+shopBtn.h){
-    shopOpen = true; Sfx.beep(520,0.07,'square',0.05); layoutShop(); return;
   }
   onDown(x, y);
 }, { passive:false });
