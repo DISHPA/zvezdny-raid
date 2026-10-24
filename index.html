@@ -1225,7 +1225,7 @@ window.RAID = {
   setZone(z){ G.zone = Math.max(1, Math.floor(+z) || 1); G.stage = 1; G2.monster = null; G2.spawnT = 0.2; },
   shop(open){ shopOpen = !!open; layoutShop(); },
   tab(t){ tab = t; layoutShop(); },
-  sheet(){ return { cards: sheets.cards.map(c=>({key:c.key,x:c.x,y:c.y,w:c.w,h:c.h})), tabs: sheets.tabs.slice(), close: sheets.close, prestige: sheets.prestige }; },
+  sheet(){ return { cards: sheets.cards.map(c=>({key:c.key,x:c.x,y:c.y,w:c.w,h:c.h})), tabs: sheets.tabs.slice(), close: sheets.close, prestige: sheets.prestige, shopBtn }; },
   tapAt: tapAttack, hero: ()=>({hp:G2.hp,max:G2.maxHP}),
   gain: prestigeGain,
   offline(sec){
