@@ -1132,11 +1132,18 @@ function resize(){
 window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', ()=>setTimeout(resize, 120));
 
-cv.addEventListener('pointerdown', (e)=>{
+function localXY(e){
+  const r = cv.getBoundingClientRect();
+  let cx = e.clientX, cy = e.clientY;
+  if(cx === undefined && e.touches && e.touches[0]){ cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+  if(cx === undefined && e.changedTouches && e.changedTouches[0]){ cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY; }
+  const sc = (r.width && cv.clientWidth) ? (cv.clientWidth / r.width) : 1;
+  return { x: (cx - r.left) * sc, y: (cy - r.top) * sc };
+}
+function handleDown(e){
   e.preventDefault();
   Sfx.init();
-  const r = cv.getBoundingClientRect();
-  const x = e.clientX - r.left, y = e.clientY - r.top;
+  const p = localXY(e), x = p.x, y = p.y;
   if(shopT < 0.15 && shopBtn && x > shopBtn.x && x < shopBtn.x+shopBtn.w && y > shopBtn.y && y < shopBtn.y+shopBtn.h){
     offlineReport = null; save();
     shopOpen = true; Sfx.beep(520,0.07,'square',0.05); layoutShop(); return;
@@ -1147,15 +1154,19 @@ cv.addEventListener('pointerdown', (e)=>{
     return;
   }
   onDown(x, y);
-}, { passive:false });
+}
+
+cv.addEventListener('pointerdown', handleDown, { passive:false });
+if(!window.PointerEvent){
+  cv.addEventListener('mousedown', handleDown, { passive:false });
+  cv.addEventListener('touchstart', handleDown, { passive:false });
+}
 
 cv.addEventListener('pointermove', (e)=>{
-  const r = cv.getBoundingClientRect();
-  onMove(e.clientX - r.left, e.clientY - r.top);
+  const p = localXY(e); onMove(p.x, p.y);
 });
 cv.addEventListener('pointerup', (e)=>{
-  const r = cv.getBoundingClientRect();
-  onUp(e.clientX - r.left, e.clientY - r.top);
+  const p = localXY(e); onUp(p.x, p.y);
 });
 cv.addEventListener('pointercancel', ()=>{ pointer.down = false; });
 
