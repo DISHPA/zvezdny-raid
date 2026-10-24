@@ -57,12 +57,37 @@
 
 ## Подключение к Telegram как Mini App
 
+**Уже сделано** (бот живёт, приложение открывается):
+
+- Адрес: <https://dishpa.github.io/zvezdny-raid/>
+- Бот: <https://t.me/zvezdny_raid_bot> — имя «Звёздный Рейд»
+- Кнопка меню в чате: **PLAY** → открывает Mini App
+  (`getChatMenuButton` отдаёт `{"type":"web_app","text":"PLAY", ...}`)
+- Заданы описание бота, короткое описание и команда `/start`
+
+Как это сделано с нуля:
+
 1. Напиши [@BotFather](https://t.me/BotFather) → `/newbot` → получи токен и юзернейм бота.
 2. `/newapp` → выбери бота → задай название, описание, иконку 640×360.
 3. **Web App URL** — адрес с GitHub Pages из шага выше (обязательно HTTPS).
 4. Проверь: `/myapps` → у приложения есть кнопка «Open».
 5. Кнопка в чате: `/setmenubutton` → выбери бота → вставь тот же URL → задай
    подпись, например «Играть».
+
+Без BotFather то же самое делается через Bot API (нужен только токен):
+
+```bash
+# кнопка меню
+curl -X POST "https://api.telegram.org/bot<TOKEN>/setChatMenuButton" \
+  -H "Content-Type: application/json" \
+  -d '{"menu_button":{"type":"web_app","text":"PLAY","web_app":{"url":"https://dishpa.github.io/zvezdny-raid/"}}}'
+# описания
+curl -X POST "https://api.telegram.org/bot<TOKEN>/setMyDescription" \
+  -H "Content-Type: application/json" -d '{"description":"..."}'
+```
+
+> Из России `api.telegram.org` открывается только через VPN/прокси — например,
+> `curl --proxy http://127.0.0.1:10809 ...`.
 
 Дальше игра открывается прямо в Telegram: `window.Telegram.WebApp` сам вызовет
 `ready()` и `expand()`, подгонит цвет шапки и включит вибро-отклик на ударах.

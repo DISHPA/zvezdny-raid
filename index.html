@@ -531,13 +531,13 @@ function layoutShop(){
   const gh = H - gy - pad - U*1.2;
 
   if(tab === 'pr'){
-    sheets.prestige = { x: pad, y: gy + U, w: gw, h: U*11 };
+    sheets.prestige = { x: pad, y: gy + U, w: gw, h: Math.max(U*22, Math.min(gh - U*2, U*30)) };
     return;
   }
   const keys = TABS.find(t=>t.id===tab).keys;
   const cols = 2, rows = Math.ceil(keys.length/cols);
   const cw = (gw - U*1.5)/cols;
-  const chh = Math.min((gh - U*1.5*(rows-1))/Math.max(rows,1), U*20);
+  const chh = (gh - U*1.5*(rows-1))/Math.max(rows,1);
   keys.forEach((k,i)=>{
     const cx = pad + (i%cols)*(cw + U*1.5);
     const cy = gy + Math.floor(i/cols)*(chh + U*1.5);
@@ -756,7 +756,9 @@ function update(dt){
   G.playTime += dt;
 
   // анимации
+  const prevShopT = shopT;
   shopT = clamp(shopT + (shopOpen ? dt*7 : -dt*7), 0, 1);
+  if(shopT !== prevShopT && shopT > 0.001) layoutShop();
   if(G2.shake > 0) G2.shake = Math.max(0, G2.shake - dt*2.4);
   if(G2.flash > 0) G2.flash = Math.max(0, G2.flash - dt*2.0);
   if(G2.atkAnim > 0) G2.atkAnim = Math.max(0, G2.atkAnim - dt*7);
@@ -1216,8 +1218,8 @@ window.RAID = {
   get up(){ return Object.assign({}, G.up); }, get ach(){ return Object.keys(G.ach); },
   get monster(){ return G2.monster ? { hp: G2.monster.hp, max: G2.monster.maxHP, boss: G2.monster.boss } : null; },
   stats, cost, start: startGame, buy, doPrestige, save,
-  setGold(n){ G.gold = Math.max(0, n|0); },
-  setZone(z){ G.zone = Math.max(1, z|0); G.stage = 1; G2.monster = null; G2.spawnT = 0.2; },
+  setGold(n){ const v = Math.max(0, Math.floor(+n) || 0); G.gold = v; G.totalGold = Math.max(G.totalGold, v); },
+  setZone(z){ G.zone = Math.max(1, Math.floor(+z) || 1); G.stage = 1; G2.monster = null; G2.spawnT = 0.2; },
   shop(open){ shopOpen = !!open; layoutShop(); },
   tab(t){ tab = t; layoutShop(); },
   sheet(){ return { cards: sheets.cards.map(c=>({key:c.key,x:c.x,y:c.y,w:c.w,h:c.h})), tabs: sheets.tabs.slice(), close: sheets.close, prestige: sheets.prestige }; },
