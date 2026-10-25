@@ -76,7 +76,7 @@
     </div>
   </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/js-dos@8.5.3/dist/js-dos.js"></script>
+<script src="./js-dos.js"></script>
 <script>
 (function () {
   var dosEl = document.getElementById('dos');
@@ -100,8 +100,9 @@
 
   if (typeof Dos !== 'function') {
     st.textContent = 'ошибка';
-    load.innerHTML = '<div>НЕ УДАЛОСЬ ЗАГРУЗИТЬ ЭМУЛЯТОР</div>' +
-      '<div style="opacity:.6;font-size:11px">проверьте сеть</div>';
+    load.innerHTML = '<div>ЭМУЛЯТОР НЕ ЗАГРУЗИЛСЯ</div>' +
+      '<div style="opacity:.6;font-size:11px;text-align:center;max-width:80%">файл js-dos.js недоступен</div>' +
+      '<div style="opacity:.5;font-size:10px">' + location.href.replace(/[?#].*$/, '') + '</div>';
     return;
   }
 
@@ -109,10 +110,12 @@
   try {
     Dos(dosEl, {
       url: './doom.jsdos',
+      pathPrefix: './',
       theme: 'dark',
       autoStart: true,
       noCloud: true,
       backend: 'dosbox-x',
+      workerThread: false,
       imageRendering: 'pixelated',
       renderAspect: '4/3',
       scaleControls: 1,
@@ -141,13 +144,27 @@
       if (load.parentNode) load.remove();
       pad.classList.remove('hide');
       setTimeout(function () { try { cv.focus(); } catch (e) {} }, 120);
-    } else if (Date.now() - t0 > 90000) {
+    } else if (Date.now() - t0 > 60000) {
       clearInterval(tick); clearInterval(fake);
       st.textContent = 'ошибка';
-      load.innerHTML = '<div>ЭМУЛЯТОР НЕ ЗАПУСТИЛСЯ</div>' +
-        '<div style="opacity:.6;font-size:11px;text-align:center;max-width:80%">обновите страницу</div>';
+      var msg = window.__dosErr || 'неизвестно';
+      load.innerHTML = '<div>ЭМУЛЯТОР НЕ СТАРТОВАЛ</div>' +
+        '<div style="opacity:.7;font-size:11px;text-align:center;max-width:86%;color:#ff9a9a">' +
+        String(msg).slice(0, 220) + '</div>' +
+        '<div style="opacity:.5;font-size:10px">проверьте сеть и обновите</div>';
     }
   }, 300);
+
+  window.addEventListener('error', function (ev) {
+    var m = String((ev && ev.message) || 'error');
+    if (m.indexOf('ResizeObserver') >= 0) return;
+    window.__dosErr = m;
+  });
+  window.addEventListener('unhandledrejection', function (ev) {
+    var m = String((ev && ev.reason) || 'rejection');
+    if (m.indexOf('ResizeObserver') >= 0) return;
+    window.__dosErr = m.slice(0, 220);
+  });
 
   /* ── экранные кнопки → клавиатура ── */
   var CODES = {
