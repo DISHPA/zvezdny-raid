@@ -3106,17 +3106,53 @@ const Doom = (() => {
       }
 
       const t0 = Date.now();
+      let cvSeen = 0;
       tmr = setInterval(() => {
         const cv = host.querySelector('canvas');
         if (cv) {
-          clearInterval(tmr); clearInterval(fake);
-          ready = true;
-          setProgress(1);
-          setStatus('играй');
-          fit();
-          const box = el('dload');
-          if (box && box.parentNode) box.parentNode.removeChild(box);
-          setTimeout(() => { try { cv.focus(); } catch (e) {} }, 120);
+          if (!cvSeen) {
+            /* канвас есть, но DOOM ещё грузится — показываем «поехали» */
+            cvSeen = Date.now();
+            setStatus('загрузка DOOM…');
+            setProgress(0.9);
+            /* эмулятору нужен фокус и клик, иначе стоит на месте */
+            const poke = () => {
+              try { cv.focus(); } catch (e) {}
+              try {
+                const o = { bubbles: true, cancelable: true, clientX: cv.clientWidth / 2, clientY: cv.clientHeight / 2, pointerId: 1, pointerType: 'mouse', isPrimary: true };
+                cv.dispatchEvent(new PointerEvent('pointerdown', o));
+                cv.dispatchEvent(new PointerEvent('pointerup', o));
+                cv.dispatchEvent(new MouseEvent('mousedown', o));
+                cv.dispatchEvent(new MouseEvent('mouseup', o));
+                cv.dispatchEvent(new MouseEvent('click', o));
+              } catch (e) {}
+            };
+            poke();
+            setTimeout(poke, 900);
+            setTimeout(poke, 2200);
+          }
+          /* ждём, пока на канвасе появятся непрозрачные пиксели */
+          let painted = false, canRead = false;
+          try {
+            const c2 = cv.getContext('2d', { willReadFrequently: true });
+            if (c2 && cv.width > 8) {
+              canRead = true;
+              const d = c2.getImageData(0, 0, Math.min(cv.width, 24), Math.min(cv.height, 24)).data;
+              for (let i = 0; i < d.length; i += 4) { if (d[i] + d[i + 1] + d[i + 2] > 24) { painted = true; break; } }
+            }
+          } catch (e) { canRead = false; }
+          const waited = Date.now() - (cvSeen || Date.now());
+          /* если пиксели прочитать нельзя (webgl) — не держим шит дольше 14 с */
+          if (painted || waited > (canRead ? 30000 : 14000)) {
+            clearInterval(tmr); clearInterval(fake);
+            ready = true;
+            setProgress(1);
+            setStatus('играй');
+            fit();
+            const box = el('dload');
+            if (box && box.parentNode) box.parentNode.removeChild(box);
+            setTimeout(() => { try { cv.focus(); } catch (e) {} }, 120);
+          }
         } else if (el('dload') && /НЕ ЗАПУСТИЛСЯ/.test(el('dload').textContent)) {
           clearInterval(tmr);
         } else if (Date.now() - t0 > 75000) {
