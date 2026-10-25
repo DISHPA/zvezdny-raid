@@ -3088,6 +3088,7 @@ const Doom = (() => {
   let cool = 0, hurt = 0, flash = 0, msg = '', msgT = 0;
   let animT = 0, bob = 0, recoil = 0, dead = false, frames = 0, regen = 0;
   let punch = 0, punchSide = 1;
+  const STAR = (() => { const a = new Float32Array(42 * 3); for (let i = 0; i < 42; i++) { a[i*3] = Math.random(); a[i*3+1] = Math.random(); a[i*3+2] = Math.random(); } return a; })();
   let shopTab = 'w', shopOn = false;
   const rcd = { strike: 0, tornado: 0, meteor: 0, heal: 0 };
   const keys = { f: 0, b: 0, l: 0, r: 0, fire: 0 };
@@ -3532,21 +3533,48 @@ const Doom = (() => {
     const FOV = Math.PI / 3;
     const horizon = H * 0.5 + Math.sin(bob) * 2 + (shake > 0 ? (Math.random() - 0.5) * shake * 26 : 0);
 
-    /* потолок и пол */
+    /* потолок: градиент + звёзды */
     const sky = cx.createLinearGradient(0, 0, 0, horizon);
-    sky.addColorStop(0, '#120820'); sky.addColorStop(1, '#2a1230');
-    cx.fillStyle = sky; cx.fillRect(0, 0, W, horizon);
-    const gr = cx.createLinearGradient(0, horizon, 0, H);
-    gr.addColorStop(0, '#241028'); gr.addColorStop(1, '#0a0410');
-    cx.fillStyle = gr; cx.fillRect(0, horizon, W, H - horizon);
-    /* сетка на полу — даёт глубину */
-    cx.strokeStyle = 'rgba(255,209,102,0.13)';
-    cx.lineWidth = 1;
-    for (let gz = 1; gz < 14; gz++) {
-      const yy = horizon + (H - horizon) * (gz / 14) * (gz / 14);
-      cx.beginPath(); cx.moveTo(0, yy); cx.lineTo(W, yy); cx.stroke();
+    sky.addColorStop(0, '#0a0514'); sky.addColorStop(0.65, '#1c0a26'); sky.addColorStop(1, '#33143a');
+    cx.fillStyle = sky; cx.fillRect(0, 0, W, Math.max(0, horizon));
+    if (horizon > 20) {
+      cx.fillStyle = 'rgba(255,255,255,0.55)';
+      for (let s2 = 0; s2 < 42; s2++) {
+        const sx = (STAR[s2 * 3] * W + pa * 90) % W;
+        const sy = STAR[s2 * 3 + 1] * horizon * 0.92;
+        const ss = STAR[s2 * 3 + 2] * 1.7 + 0.4;
+        cx.globalAlpha = 0.25 + 0.5 * STAR[s2 * 3 + 2];
+        cx.fillRect(sx, sy, ss, ss);
+      }
+      cx.globalAlpha = 1;
     }
-    /* вертикальные линии пола из центра */
+    /* пол: перспективные полосы + неоновые стыки */
+    const fh2 = H - horizon;
+    for (let gz = 0; gz < 16; gz++) {
+      const t0 = (gz / 16) * (gz / 16), t1 = ((gz + 1) / 16) * ((gz + 1) / 16);
+      const y0 = horizon + fh2 * t0, y1 = horizon + fh2 * t1;
+      if (y1 - y0 < 0.4) continue;
+      const dp = 0.10 + 0.90 * (gz / 16);
+      const alt = gz % 2 ? 1 : 0;
+      const r0 = Math.round((16 + alt * 9) * dp + 5), g0 = Math.round((9 + alt * 4) * dp + 3), b0 = Math.round((22 + alt * 10) * dp + 6);
+      cx.fillStyle = 'rgb(' + r0 + ',' + g0 + ',' + b0 + ')';
+      cx.fillRect(0, y0, W, y1 - y0 + 0.6);
+      cx.fillStyle = 'rgba(255,209,102,' + (0.05 + 0.11 * (gz / 16)).toFixed(3) + ')';
+      cx.fillRect(0, y0, W, Math.max(0.6, (y1 - y0) * 0.10));
+    }
+    /* радиальные линии, сходящиеся в точку схода — глубина */
+    const vpx = W / 2;
+    const ph = ((pa / (Math.PI / 4)) % 1 + 1) % 1;
+    cx.strokeStyle = 'rgba(255,209,102,0.16)';
+    cx.lineWidth = 1;
+    for (let k = -9; k <= 9; k++) {
+      const frac = (k + ph) / 9;
+      cx.beginPath(); cx.moveTo(vpx, horizon); cx.lineTo(vpx + frac * W, H); cx.stroke();
+    }
+    /* свет из-под ног */
+    const pl = cx.createRadialGradient(vpx, horizon + fh2 * 0.18, 2, vpx, horizon + fh2 * 0.18, Math.max(W, H) * 0.55);
+    pl.addColorStop(0, 'rgba(255,180,110,0.09)'); pl.addColorStop(1, 'rgba(255,180,110,0)');
+    cx.fillStyle = pl; cx.fillRect(0, horizon, W, fh2);
 
     /* проекция мировой точки на экран (null если вне поля зрения) */
     const proj = (wx, wy) => {
@@ -3601,35 +3629,68 @@ const Doom = (() => {
       if (fh <= 0) continue;
       let sh = clamp(1 - dist / (maxD * 0.9), 0.05, 1);
       sh = Math.pow(sh, 0.9);
+      /* фонарик: края обзора темнее */
+      const edge = Math.abs((i + 0.5) / cols - 0.5) * 2;
+      sh *= 1 - edge * edge * 0.42;
       let u = 0;
       if (hit) u = side === 0 ? hy - Math.floor(hy) : hx - Math.floor(hx);
-      const base = side === 0 ? 1 : 0.70;
+      const base = side === 0 ? 1 : 0.72;
       const k = sh * base;
-      const r = Math.round(140 * k), g2 = Math.round(50 * k), b = Math.round(78 * k);
-      cx.fillStyle = 'rgb(' + r + ',' + g2 + ',' + b + ')';
       const xi = Math.round(i * cw2), wdtc = Math.ceil(cw2) + 1;
+      /* цвет кирпича: тёплый бордо, у дальней стены — синеватый (воздух) */
+      const air = clamp(dist / maxD, 0, 1);
+      /* вариация оттенка по клетке — стены не выглядят однотонными */
+      const hs = ((mx * 73856093) ^ (my * 19349663)) & 1023;
+      const hv = (hs % 7) / 7;
+      const wr = 118 + 46 * air + hv * 44, wg = 40 + 30 * air + hv * 14, wb = 66 + 62 * air + hv * 30;
+      const r = Math.round(wr * k), g2 = Math.round(wg * k), b = Math.round(wb * k);
+      /* вертикальный объём: 3 полосы вместо плоской заливки */
+      const band = fh / 3;
+      cx.fillStyle = 'rgb(' + Math.round(r * 0.72) + ',' + Math.round(g2 * 0.72) + ',' + Math.round(b * 0.78) + ')';
       cx.fillRect(xi, fy0, wdtc, fh);
+      cx.fillStyle = 'rgb(' + r + ',' + g2 + ',' + b + ')';
+      cx.fillRect(xi, fy0 + band * 0.18, wdtc, fh * 0.64);
+      cx.fillStyle = 'rgb(' + Math.min(255, Math.round(r * 1.10)) + ',' + Math.min(255, Math.round(g2 * 1.10)) + ',' + Math.min(255, Math.round(b * 1.06)) + ')';
+      cx.fillRect(xi, fy0 + band * 0.42, wdtc, fh * 0.09);
       if (hit && fh > 4) {
         /* горизонтальные швы */
-        cx.fillStyle = 'rgba(0,0,0,' + (0.38 * sh).toFixed(3) + ')';
+        cx.fillStyle = 'rgba(0,0,0,' + (0.44 * sh).toFixed(3) + ')';
         for (let s2 = 0; s2 <= 4; s2++) {
           const yy = top + (hgt * s2) / 4;
-          if (yy >= fy0 - 1 && yy <= fy1) cx.fillRect(xi, yy, wdtc, Math.max(1, hgt * 0.022));
+          if (yy >= fy0 - 1 && yy <= fy1) cx.fillRect(xi, yy, wdtc, Math.max(1, hgt * 0.024));
         }
         /* вертикальные швы: 3 кирпича на тайл */
         const cf = (u * 3) % 1;
         if (cf < 0.09 || cf > 0.91) {
-          cx.fillStyle = 'rgba(0,0,0,' + (0.34 * sh).toFixed(3) + ')';
+          cx.fillStyle = 'rgba(0,0,0,' + (0.40 * sh).toFixed(3) + ')';
           cx.fillRect(xi, fy0, wdtc, fh);
         }
+        /* блик по верхней кромке кирпича */
+        cx.fillStyle = 'rgba(255,215,180,' + (0.055 * sh).toFixed(3) + ')';
+        cx.fillRect(xi, fy0 + band * 0.18, wdtc, Math.max(1, fh * 0.02));
         /* неоновая подсветка */
         if (cf > 0.30 && cf < 0.70) {
-          cx.fillStyle = 'rgba(255,209,102,' + (0.12 * sh).toFixed(3) + ')';
+          cx.fillStyle = 'rgba(255,209,102,' + (0.16 * sh).toFixed(3) + ')';
           const ny = top + hgt * 0.42;
-          if (ny > fy0 && ny < fy1) cx.fillRect(xi, ny, wdtc, Math.max(1, hgt * 0.030));
+          if (ny > fy0 && ny < fy1) cx.fillRect(xi, ny, wdtc, Math.max(1, hgt * 0.032));
         }
+        /* затемнение у пола и потолка (ambient occlusion) */
+        cx.fillStyle = 'rgba(0,0,0,' + (0.30 * sh).toFixed(3) + ')';
+        cx.fillRect(xi, fy1 - Math.min(fh * 0.12, 18), wdtc, Math.min(fh * 0.12, 18));
+        cx.fillStyle = 'rgba(0,0,0,' + (0.20 * sh).toFixed(3) + ')';
+        cx.fillRect(xi, fy0, wdtc, Math.min(fh * 0.07, 10));
       }
     }
+    /* дымка на горизонте поверх стен — «воздушная перспектива» */
+    const hz2 = cx.createLinearGradient(0, horizon - H * 0.16, 0, horizon + H * 0.16);
+    hz2.addColorStop(0, 'rgba(70,20,60,0)');
+    hz2.addColorStop(0.5, 'rgba(90,30,70,0.30)');
+    hz2.addColorStop(1, 'rgba(70,20,60,0)');
+    cx.fillStyle = hz2; cx.fillRect(0, horizon - H * 0.16, W, H * 0.32);
+    /* виньетка */
+    const vg = cx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.30, W / 2, H / 2, Math.max(W, H) * 0.78);
+    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.62)');
+    cx.fillStyle = vg; cx.fillRect(0, 0, W, H);
 
     /* спрайты монстров: сортируем по дальности */
     const vis = [];
