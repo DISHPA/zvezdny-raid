@@ -1781,7 +1781,7 @@ function update(dt) {
   }
 }
 /* ============================== RENDER HELPERS ============================== */
-let layout = { shop: null, btn: null, skillBtns: [], cards: [], tabs: [], closeBtn: null, buyAll: null, skinCards: [], achRows: [], prBtn: null };
+let layout = { shop: null, btn: null, skillBtns: [], cards: [], tabs: [], closeBtn: null, buyAll: null, skinCards: [], achRows: [], prBtn: null, doomBtn: null };
 
 function relayout() { layoutShop(); }
 
@@ -2819,6 +2819,23 @@ function drawMenu() {
     P(icx + ir * 1.2, icy - ir * 1.2, pxs, ir * 2.4, '#ff4d5e');
   }
 
+  /* DOOM — маленький аркадный автомат под кнопкой звука */
+  const db2 = u * 30;
+  const dbx = sx, dby = sy + sb + u * 8;
+  layout.doomBtn = { x: dbx, y: dby, w: db2, h: db2 };
+  arcPanel(dbx + pxs * 2, dby + pxs * 2, db2, db2, '#3a0f16', null, pxs * 2);
+  arcPanel(dbx, dby, db2, db2, '#7a1622', '#ffd166', pxs * 2);
+  /* череп: черепная коробка + глаза + челюсть */
+  const sk2 = db2 * 0.30;
+  const skx = dbx + db2 / 2, sky2 = dby + db2 * 0.42;
+  P(skx - sk2 * 0.85, sky2 - sk2, sk2 * 1.7, sk2 * 1.5, '#ffe9b0');
+  P(skx - sk2 * 0.55, sky2 - sk2 * 0.35, sk2 * 0.5, sk2 * 0.45, '#7a1622');
+  P(skx + sk2 * 0.05, sky2 - sk2 * 0.35, sk2 * 0.5, sk2 * 0.45, '#7a1622');
+  P(skx - sk2 * 0.5, sky2 + sk2 * 0.45, sk2 * 1.0, sk2 * 0.35, '#ffe9b0');
+  P(skx - sk2 * 0.12, sky2 + sk2 * 0.5, pxs, sk2 * 0.28, '#7a1622');
+  P(skx + sk2 * 0.28, sky2 + sk2 * 0.5, pxs, sk2 * 0.28, '#7a1622');
+  arcTxt('DOOM', dbx + db2 / 2, dby + db2 - u * 5, u * 8, '#ffd166', 'center', { shadow: pxs * 0.5, shadowCol: '#3a0f16', maxW: db2 - pxs * 3 });
+
   /* ---------- ЗАГОЛОВОК В БАННЕРЕ ---------- */
   const bw = Math.min(W * 0.90, u * 470);
   const bh = u * 78;
@@ -2937,6 +2954,11 @@ function onDown(e) {
     if (inRect(p, layout.playBtn)) {
       state = 'play'; G2.spawnT = 0.3; save();
       Sfx.win(); HAP('win');
+      return;
+    }
+    if (inRect(p, layout.doomBtn)) {
+      Sfx.buy(); HAP('buy');
+      try { window.location.href = './doom.html'; } catch (err) {}
       return;
     }
     return;

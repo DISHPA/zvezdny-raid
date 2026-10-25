@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>DOOM — Звёздный Рейд</title>
+<style>
+  :root { --gold:#ffd166; --red:#8f1f2c; --dark:#07030e; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; background:#000; overflow:hidden;
+    font-family:ui-monospace,Consolas,"Courier New",monospace; color:#fff2c0;
+    touch-action:none; overscroll-behavior:none; }
+  #wrap { position:fixed; inset:0; display:flex; flex-direction:column; }
+
+  #bar { flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:4px 8px;
+    background:#140a24; border-bottom:2px solid var(--gold); font-size:11px; letter-spacing:.06em;
+    z-index:20; }
+  #bar b { color:var(--gold); }
+  #bar #st { opacity:.65; font-size:10px; }
+  #bar a { margin-left:auto; color:#fff2c0; text-decoration:none; border:1px solid #8f1f2c;
+    padding:3px 9px; background:#3a0f16; }
+
+  #stage { flex:1 1 auto; min-height:0; position:relative; background:#000; }
+  #dos { position:absolute; inset:0; background:#000; }
+
+  #load { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    flex-direction:column; gap:10px; background:#07030e; font-size:13px; color:var(--gold); z-index:30; }
+  #load .bo { width:60%; max-width:320px; height:8px; border:1px solid #8f1f2c; background:#140a24; }
+  #load .bi { height:100%; width:0; background:var(--gold); transition:width .2s; }
+
+  /* ── экранное управление ── */
+  #pad { position:absolute; inset:0; z-index:25; pointer-events:none; }
+  #pad .g { position:absolute; display:grid; gap:6px; pointer-events:none; }
+  #dpad { left:10px; bottom:14px; grid-template-columns:repeat(3,50px); grid-template-rows:repeat(3,50px); }
+  #btns { right:10px; bottom:14px; grid-template-columns:repeat(2,54px); grid-template-rows:repeat(2,54px); }
+  #pad button {
+    pointer-events:auto; border:2px solid #8f1f2c; background:rgba(58,15,22,.55);
+    color:var(--gold); font:inherit; font-size:16px; line-height:1; border-radius:6px;
+    display:flex; align-items:center; justify-content:center; padding:0;
+    box-shadow:0 2px 0 rgba(0,0,0,.6); touch-action:none; user-select:none;
+  }
+  #pad button:active, #pad button.on { background:var(--gold); color:#3a0f16; border-color:var(--gold); }
+  #pad .wide { grid-column:span 3; }
+  #pad .big { font-size:11px; letter-spacing:.04em; }
+  .hide { display:none !important; }
+  #tip { position:absolute; left:6px; top:6px; z-index:26; font-size:9px; color:#ffd166;
+    opacity:.55; pointer-events:none; letter-spacing:.05em; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="bar">
+    <b>DOOM</b><span id="st">загрузка…</span>
+    <a href="./index.html">← НАЗАД</a>
+  </div>
+  <div id="stage">
+    <div id="dos"></div>
+    <div id="load">
+      <div>ЗАГРУЗКА DOOM…</div>
+      <div class="bo"><div class="bi" id="bi"></div></div>
+      <div id="pct" style="opacity:.7">0%</div>
+    </div>
+    <div id="pad" class="hide">
+      <div class="g" id="dpad">
+        <span></span><button data-k="ArrowUp">▲</button><span></span>
+        <button data-k="ArrowLeft">◀</button><span></span><button data-k="ArrowRight">▶</button>
+        <span></span><button data-k="ArrowDown">▼</button><span></span>
+      </div>
+      <div class="g" id="btns">
+        <button data-k="Space" class="big">ИСП</button>
+        <button data-k="Control" class="big">ОГОНЬ</button>
+        <button data-k="Enter" class="big">ВВОД</button>
+        <button data-k="Escape" class="big">МЕНЮ</button>
+      </div>
+      <div id="tip">FIRE = Ctrl · ИСП = пробел</div>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/js-dos@8.5.3/dist/js-dos.js"></script>
+<script>
+(function () {
+  var dosEl = document.getElementById('dos');
+  var load  = document.getElementById('load');
+  var bi    = document.getElementById('bi');
+  var pct   = document.getElementById('pct');
+  var st    = document.getElementById('st');
+  var pad   = document.getElementById('pad');
+
+  function progress(p) {
+    p = Math.max(0, Math.min(1, p || 0));
+    bi.style.width = (p * 100).toFixed(0) + '%';
+    pct.textContent = (p * 100).toFixed(0) + '%';
+  }
+
+  try {
+    if (window.Telegram && window.Telegram.WebApp) {
+      try { Telegram.WebApp.expand(); Telegram.WebApp.ready(); } catch (e) {}
+    }
+  } catch (e) {}
+
+  if (typeof Dos !== 'function') {
+    st.textContent = 'ошибка';
+    load.innerHTML = '<div>НЕ УДАЛОСЬ ЗАГРУЗИТЬ ЭМУЛЯТОР</div>' +
+      '<div style="opacity:.6;font-size:11px">проверьте сеть</div>';
+    return;
+  }
+
+  /* запуск эмулятора */
+  try {
+    Dos(dosEl, {
+      url: './doom.jsdos',
+      theme: 'dark',
+      autoStart: true,
+      noCloud: true,
+      backend: 'dosbox-x',
+      imageRendering: 'pixelated',
+      renderAspect: '4/3',
+      scaleControls: 1,
+      volume: 0.6
+    });
+  } catch (e) {
+    load.innerHTML = '<div>ОШИБКА ЗАПУСКА</div><div style="opacity:.6;font-size:11px">' +
+      String(e && e.message || e) + '</div>';
+    return;
+  }
+
+  /* прогресс: растёт сам, пока не появился canvas */
+  var p = 0;
+  var fake = setInterval(function () {
+    p = Math.min(0.92, p + 0.03);
+    progress(p);
+  }, 400);
+
+  var t0 = Date.now();
+  var tick = setInterval(function () {
+    var cv = dosEl.querySelector('canvas');
+    if (cv) {
+      clearInterval(tick); clearInterval(fake);
+      progress(1);
+      st.textContent = 'играй';
+      if (load.parentNode) load.remove();
+      pad.classList.remove('hide');
+      setTimeout(function () { try { cv.focus(); } catch (e) {} }, 120);
+    } else if (Date.now() - t0 > 90000) {
+      clearInterval(tick); clearInterval(fake);
+      st.textContent = 'ошибка';
+      load.innerHTML = '<div>ЭМУЛЯТОР НЕ ЗАПУСТИЛСЯ</div>' +
+        '<div style="opacity:.6;font-size:11px;text-align:center;max-width:80%">обновите страницу</div>';
+    }
+  }, 300);
+
+  /* ── экранные кнопки → клавиатура ── */
+  var CODES = {
+    ArrowUp:[38,'ArrowUp'], ArrowDown:[40,'ArrowDown'],
+    ArrowLeft:[37,'ArrowLeft'], ArrowRight:[39,'ArrowRight'],
+    Space:[32,'Space'], Control:[17,'ControlLeft'],
+    Enter:[13,'Enter'], Escape:[27,'Escape']
+  };
+
+  function send(type, key) {
+    var c = CODES[key] || [0, key];
+    var ev = new KeyboardEvent(type, {
+      key: key === 'Control' ? 'Control' : key,
+      code: c[1], keyCode: c[0], which: c[0],
+      bubbles: true, cancelable: true
+    });
+    try { Object.defineProperty(ev, 'keyCode', { get: function () { return c[0]; } }); } catch (e) {}
+    try { Object.defineProperty(ev, 'which',   { get: function () { return c[0]; } }); } catch (e) {}
+    var tgt = document.activeElement || dosEl;
+    tgt.dispatchEvent(ev);
+    document.dispatchEvent(ev);
+    window.dispatchEvent(ev);
+  }
+
+  pad.querySelectorAll('button[data-k]').forEach(function (b) {
+    var key = b.getAttribute('data-k');
+    var down = false;
+    function press(e) {
+      e.preventDefault();
+      if (down) return;
+      down = true;
+      b.classList.add('on');
+      send('keydown', key);
+      if (navigator.vibrate) { try { navigator.vibrate(8); } catch (er) {} }
+    }
+    function release(e) {
+      if (e) e.preventDefault();
+      if (!down) return;
+      down = false;
+      b.classList.remove('on');
+      send('keyup', key);
+    }
+    b.addEventListener('pointerdown', press);
+    b.addEventListener('pointerup', release);
+    b.addEventListener('pointercancel', release);
+    b.addEventListener('pointerleave', release);
+    b.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  });
+
+})();
+</script>
+</body>
+</html>
