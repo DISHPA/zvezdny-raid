@@ -17,11 +17,69 @@
   #game{display:block;width:100%;height:100%;touch-action:none}
   #rot{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
     background:#08040f;color:#9ad;font-size:15px;text-align:center;padding:24px;z-index:99}
+
+  /* ── DOOM overlay ── */
+  #dw{position:fixed;inset:0;display:none;flex-direction:column;background:#000;z-index:120}
+  #dw.on{display:flex}
+  #dtop{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:4px 8px;
+    background:#140a24;border-bottom:2px solid #ffd166;color:#fff2c0;
+    font:11px/1.3 ui-monospace,Consolas,monospace;letter-spacing:.06em;z-index:22}
+  #dtop b{color:#ffd166}
+  #dst{opacity:.65;font-size:10px}
+  #dback{margin-left:auto;color:#fff2c0;text-decoration:none;border:1px solid #8f1f2c;
+    background:#3a0f16;padding:4px 10px;font:inherit;border-radius:0}
+  #dstg{flex:1 1 auto;min-height:0;position:relative;background:#000}
+  #ddos{position:absolute;background:#000;overflow:hidden}
+  #ddos canvas{display:block;width:100%!important;height:100%!important}
+  #dload{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:10px;background:#07030e;font:13px ui-monospace,monospace;color:#ffd166;z-index:30}
+  #dload .bo{width:60%;max-width:320px;height:8px;border:1px solid #8f1f2c;background:#140a24}
+  #dload .bi{height:100%;width:0;background:#ffd166;transition:width .2s}
+  #dpadw{position:absolute;inset:0;z-index:25;pointer-events:none}
+  #dpadw .g{position:absolute;display:grid;gap:6px;pointer-events:none}
+  #ddir{left:8px;bottom:12px;grid-template-columns:repeat(3,46px);grid-template-rows:repeat(3,46px)}
+  #dbtn{right:8px;bottom:12px;grid-template-columns:repeat(2,50px);grid-template-rows:repeat(2,50px)}
+  #dpadw button{pointer-events:auto;border:2px solid #8f1f2c;background:rgba(58,15,22,.55);
+    color:#ffd166;font:16px/1 ui-monospace,monospace;border-radius:6px;
+    display:flex;align-items:center;justify-content:center;padding:0;touch-action:none;
+    box-shadow:0 2px 0 rgba(0,0,0,.6);user-select:none;-webkit-user-select:none}
+  #dpadw button.on{background:#ffd166;color:#3a0f16;border-color:#ffd166}
+  #dpadw .big{font-size:10px;letter-spacing:.03em}
+  #dtip{position:absolute;left:6px;top:6px;z-index:26;font:9px ui-monospace,monospace;
+    color:#ffd166;opacity:.5;pointer-events:none;letter-spacing:.05em}
+  /* на узких экранах панели чуть меньше */
+  @media (max-width:520px){
+    #ddir{grid-template-columns:repeat(3,40px);grid-template-rows:repeat(3,40px);gap:5px}
+    #dbtn{grid-template-columns:repeat(2,44px);grid-template-rows:repeat(2,44px);gap:5px}
+    #dpadw button{font-size:14px}
+    #dpadw .big{font-size:9px}
+  }
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
 <div id="rot">Поверните устройство горизонтально</div>
+<div id="dw">
+  <div id="dtop"><b>DOOM</b><span id="dst">загрузка…</span><button id="dback" type="button">← НАЗАД</button></div>
+  <div id="dstg">
+    <div id="ddos"></div>
+    <div id="dload"><div class="bo"><div class="bi"></div></div><div>ЗАГРУЗКА DOOM…</div></div>
+    <div id="dpadw">
+      <div id="dtip"></div>
+      <div class="g" id="ddir">
+        <span></span><button type="button" data-k="ArrowUp">▲</button><span></span>
+        <button type="button" data-k="ArrowLeft">◀</button><span></span><button type="button" data-k="ArrowRight">▶</button>
+        <span></span><button type="button" data-k="ArrowDown">▼</button><span></span>
+      </div>
+      <div class="g" id="dbtn">
+        <button type="button" class="big" data-k="Space">ИСП</button>
+        <button type="button" class="big" data-k="Control">ОГОНЬ</button>
+        <button type="button" class="big" data-k="Enter">ВВОД</button>
+        <button type="button" class="big" data-k="Escape">МЕНЮ</button>
+      </div>
+    </div>
+  </div>
+</div>
 <script>
 (() => {
 'use strict';
@@ -2910,6 +2968,227 @@ function drawMenu() {
     ctx.globalAlpha = 1;
   }
 }
+/* ============================== DOOM (inline) ============================== */
+const Doom = (() => {
+  let api = null, booting = false, ready = false, failed = false, tmr = 0, fake = 0;
+
+  const el = (id) => document.getElementById(id);
+
+  function setProgress(v) {
+    const b = el('dload') && el('dload').querySelector('.bi');
+    if (b) b.style.width = Math.round(Math.max(0, Math.min(1, v)) * 100) + '%';
+  }
+  function setStatus(t) { const s = el('dst'); if (s) s.textContent = t; }
+
+  /* вписываем область 4:3 в доступное место */
+  function fit() {
+    const stage = el('dstg'), host = el('ddos');
+    if (!stage || !host) return;
+    const W = stage.clientWidth, H = stage.clientHeight;
+    if (!W || !H) return;
+    let w = W, h = w * 3 / 4;
+    if (h > H) { h = H; w = h * 4 / 3; }
+    host.style.width = Math.round(w) + 'px';
+    host.style.height = Math.round(h) + 'px';
+    host.style.left = Math.round((W - w) / 2) + 'px';
+    host.style.top = Math.round((H - h) / 2) + 'px';
+  }
+  window.addEventListener('resize', () => { if (isOpen()) fit(); });
+  window.addEventListener('orientationchange', () => setTimeout(() => { if (isOpen()) fit(); }, 250));
+
+  function fail(msg) {
+    if (failed) return;
+    failed = true;
+    clearInterval(tmr); clearInterval(fake);
+    setStatus('ошибка');
+    const box = el('dload');
+    if (box) {
+      box.innerHTML = '<div style="color:#ff9a9a">DOOM НЕ ЗАПУСТИЛСЯ</div>' +
+        '<div style="opacity:.75;font-size:11px;color:#ffd166;text-align:center;max-width:86%">' +
+        String(msg || 'неизвестная ошибка').slice(0, 200) + '</div>' +
+        '<div style="opacity:.5;font-size:10px">проверь сеть и попробуй снова</div>';
+    }
+  }
+
+  function keyEvent(type, code) {
+    const map = {
+      ArrowUp: 38, ArrowDown: 40, ArrowLeft: 37, ArrowRight: 39,
+      Space: 32, Enter: 13, Escape: 27, Control: 17
+    };
+    const codes = {
+      ArrowUp: 'ArrowUp', ArrowDown: 'ArrowDown', ArrowLeft: 'ArrowLeft', ArrowRight: 'ArrowRight',
+      Space: 'Space', Enter: 'Enter', Escape: 'Escape', Control: 'ControlLeft'
+    };
+    const ev = new KeyboardEvent(type, {
+      key: code === 'Space' ? ' ' : code === 'Enter' ? 'Enter' : code === 'Escape' ? 'Escape'
+        : code === 'Control' ? 'Control' : code,
+      code: codes[code] || code,
+      keyCode: map[code] || 0,
+      which: map[code] || 0,
+      bubbles: true, cancelable: true
+    });
+    const tgt = document.querySelector('#ddos canvas') || document.body;
+    try { tgt.dispatchEvent(ev); } catch (e) {}
+    try { window.dispatchEvent(ev); } catch (e) {}
+  }
+
+  function bindPads() {
+    const root = el('dpadw');
+    if (!root || root.dataset.bound) return;
+    root.dataset.bound = '1';
+    root.querySelectorAll('button[data-k]').forEach((b) => {
+      const code = b.dataset.k;
+      let held = false;
+      const down = (e) => {
+        e.preventDefault(); e.stopPropagation();
+        if (held) return; held = true;
+        b.classList.add('on');
+        keyEvent('keydown', code);
+      };
+      const up = (e) => {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        if (!held) return; held = false;
+        b.classList.remove('on');
+        keyEvent('keyup', code);
+      };
+      b.addEventListener('pointerdown', down);
+      b.addEventListener('pointerup', up);
+      b.addEventListener('pointercancel', up);
+      b.addEventListener('pointerleave', up);
+      b.addEventListener('contextmenu', (e) => e.preventDefault());
+    });
+  }
+
+  function boot() {
+    if (api || booting) return;
+    booting = true;
+    failed = false;
+    setStatus('загрузка…');
+    setProgress(0.02);
+
+    fake = setInterval(() => {
+      const b = el('dload') && el('dload').querySelector('.bi');
+      if (!b) { clearInterval(fake); return; }
+      const w = parseFloat(b.style.width) || 0;
+      if (w < 0.85) b.style.width = Math.min(85, w + 1.4) + '%';
+    }, 340);
+
+    const host = el('ddos');
+    if (!host) { fail('нет контейнера'); return; }
+    host.innerHTML = '';
+
+    /* js-dos подключается только здесь, по требованию */
+    const start = () => {
+      if (typeof window.Dos !== 'function') { fail('эмулятор не загружен (js-dos.js)'); return; }
+      try {
+        api = window.Dos(host, {
+          url: './doom.jsdos',
+          pathPrefix: './',
+          theme: 'dark',
+          autoStart: true,
+          noCloud: true,
+          backend: 'dosbox-x',
+          workerThread: false,
+          imageRendering: 'pixelated',
+          renderAspect: '4/3',
+          scaleControls: 0,
+          volume: 0.5,
+          kiosk: true
+        });
+      } catch (e) {
+        fail(e && e.message ? e.message : 'сбой запуска');
+        return;
+      }
+
+      const t0 = Date.now();
+      tmr = setInterval(() => {
+        const cv = host.querySelector('canvas');
+        if (cv) {
+          clearInterval(tmr); clearInterval(fake);
+          ready = true;
+          setProgress(1);
+          setStatus('играй');
+          fit();
+          const box = el('dload');
+          if (box && box.parentNode) box.parentNode.removeChild(box);
+          setTimeout(() => { try { cv.focus(); } catch (e) {} }, 120);
+        } else if (el('dload') && /НЕ ЗАПУСТИЛСЯ/.test(el('dload').textContent)) {
+          clearInterval(tmr);
+        } else if (Date.now() - t0 > 75000) {
+          clearInterval(tmr); clearInterval(fake);
+          fail('таймаут запуска эмулятора');
+        }
+      }, 250);
+    };
+
+    if (typeof window.Dos === 'function') { start(); return; }
+
+    const sc = document.createElement('script');
+    sc.src = './js-dos.js';
+    sc.onload = start;
+    sc.onerror = () => fail('не удалось скачать js-dos.js');
+    document.head.appendChild(sc);
+  }
+
+  function open() {
+    const wrap = el('dw');
+    if (!wrap) return;
+    wrap.classList.add('on');
+    bindPads();
+    fit();
+    try {
+      const t = window.Telegram && window.Telegram.WebApp;
+      if (t && t.HapticFeedback) t.HapticFeedback.impactOccurred('medium');
+    } catch (e) {}
+    boot();
+  }
+
+  function close() {
+    const wrap = el('dw');
+    if (!wrap) return;
+    wrap.classList.remove('on');
+    if (api) {
+      try { const r = api.stop(); if (r && r.catch) r.catch(() => {}); } catch (e) {}
+      api = null; ready = false; booting = false; failed = false;
+      clearInterval(tmr); clearInterval(fake);
+      const host = el('ddos');
+      if (host) host.innerHTML = '';
+    }
+    try { window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Control', code: 'ControlLeft', bubbles: true })); } catch (e) {}
+    try { window.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', code: 'Space', bubbles: true })); } catch (e) {}
+  }
+
+  function isOpen() { const w = el('dw'); return !!(w && w.classList.contains('on')); }
+
+  function init() {
+    const back = el('dback');
+    if (back) back.addEventListener('click', (e) => { e.preventDefault(); close(); });
+    window.addEventListener('error', (ev) => {
+      const m = String((ev && ev.message) || '');
+      if (m.indexOf('ResizeObserver') >= 0) return;
+      if (isOpen() && !ready) fail(m || 'ошибка');
+    });
+    window.addEventListener('unhandledrejection', (ev) => {
+      const m = String((ev && ev.reason) || '');
+      if (m.indexOf('ResizeObserver') >= 0) return;
+      if (isOpen() && !ready) fail(m || 'ошибка');
+    });
+  }
+
+  return { init, open, close, isOpen };
+})();
+
+/* авто-инициализация DOOM-оверлея */
+try {
+  Doom.init();
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && Doom.isOpen()) { e.preventDefault(); Doom.close(); }
+  });
+  const _tg = window.Telegram && window.Telegram.WebApp;
+  if (_tg && _tg.BackButton) {
+    _tg.BackButton.onClick(() => { if (Doom.isOpen()) Doom.close(); });
+  }
+} catch (e) {}
 /* ============================== INPUT ============================== */
 function localXY(e) {
   const r = cv.getBoundingClientRect();
@@ -2958,7 +3237,7 @@ function onDown(e) {
     }
     if (inRect(p, layout.doomBtn)) {
       Sfx.buy(); HAP('buy');
-      try { window.location.href = './doom.html'; } catch (err) {}
+      try { Doom.open(); } catch (err) {}
       return;
     }
     return;
@@ -3531,6 +3810,7 @@ function boot() {
     window.__dbg = () => ({ state, shopOpen, tab, shopT });
     window.__shopRect = shopButtonRect;
     window.__set = (k, v) => { G[k] = v; };
+    window.__doom = () => Doom;
     window.__offline = (sec) => {
       G.lastSeen = Date.now() - sec * 1000;
       checkOffline();
