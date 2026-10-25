@@ -3562,7 +3562,25 @@ const Doom = (() => {
       const wdt = hgt * m.t.r * 1.6;
       const top = horizon - hgt * 0.52;
       const sh = clamp(1 - v.dist / 26, 0.22, 1);
+      /* отсечение по zbuf: моб не рисуется там, где перед ним стена */
+      const halfW = wdt * 0.95;
+      let ci0 = Math.floor((cxp - halfW) / cw2);
+      let ci1 = Math.ceil((cxp + halfW) / cw2);
+      if (ci1 < 0 || ci0 >= cols) continue;
+      if (ci0 < 0) ci0 = 0;
+      if (ci1 > cols - 1) ci1 = cols - 1;
+      const dLim = v.dist - 0.3;
+      let x0 = -1;
+      cx.save();
+      cx.beginPath();
+      for (let j = ci0; j <= ci1 + 1; j++) {
+        const okJ = j <= ci1 && zbuf[j] >= dLim;
+        if (okJ && x0 < 0) x0 = j;
+        else if (!okJ && x0 >= 0) { cx.rect(x0 * cw2, 0, (j - x0) * cw2, H); x0 = -1; }
+      }
+      cx.clip();
       drawMobSprite(cxp, top, wdt, hgt, m, sh);
+      cx.restore();
     }
 
     /* частицы */
