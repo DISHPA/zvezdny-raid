@@ -61,7 +61,56 @@
   #dfire{position:absolute;right:12px;bottom:20px;width:86px;height:86px;border-radius:50%;
     font:700 13px/1.1 ui-monospace,monospace;letter-spacing:.06em;border-color:#ffd166;
     background:radial-gradient(circle at 40% 35%,#8f1f2c,#3a0f16)}
+  /* ── магазин оружия/умений в рейде ── */
+  #dshopb{margin-left:6px;color:#3a0f16;background:#ffd166;border:1px solid #fff2c0;
+    padding:5px 9px;font:700 11px/1 ui-monospace,monospace;border-radius:6px;cursor:pointer}
+  #dshop{position:absolute;inset:0;z-index:45;display:none;flex-direction:column;
+    background:linear-gradient(#12081f,#08040f);padding:6px;gap:6px;
+    font:11px/1.35 ui-monospace,Consolas,monospace;color:#fff2c0}
+  #dshop.on{display:flex}
+  #dshop .dh{display:flex;align-items:center;gap:6px;font:700 12px/1.2 ui-monospace,monospace;
+    color:#ffd166;letter-spacing:.1em;padding:1px 2px 0}
+  #dshop .dh b{margin-left:auto;color:#7ef0a0;font-size:12px;letter-spacing:0}
+  #dshop .dtabs{display:flex;gap:6px}
+  #dshop .dtabs button{flex:1;padding:8px 4px;border-radius:7px;cursor:pointer;
+    font:700 11px/1 ui-monospace,monospace;letter-spacing:.06em;color:#c99cf0;
+    background:#1a1229;border:2px solid #3d2f66}
+  #dshop .dtabs button.on{color:#3a0f16;background:#ffd166;border-color:#ffd166}
+  #dshop .dnote{min-height:14px;font:10px/1.3 ui-monospace,monospace;color:#7cf3ff;opacity:.95}
+  #dshop .dlist{flex:1 1 auto;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:5px;
+    -webkit-overflow-scrolling:touch;padding-bottom:2px}
+  #dshop .row{display:flex;align-items:center;gap:7px;padding:7px;border-radius:8px;
+    background:#150e24;border:1px solid #302450}
+  #dshop .row.own{border-color:#3ddc84}
+  #dshop .row.eq{border-color:#ffd166;background:#1c1330}
+  #dshop .row.lock{opacity:.6}
+  #dshop .row .nm{flex:1 1 auto;min-width:0;font-weight:700;color:#f0e8ff;font-size:11px}
+  #dshop .row .nm i{display:block;font-style:normal;font-weight:400;color:#7cf3ff;font-size:9.5px;opacity:.92}
+  #dshop .row button{padding:8px 8px;border-radius:6px;cursor:pointer;min-width:66px;flex:0 0 auto;
+    font:700 10.5px/1 ui-monospace,monospace;color:#04240f;background:#3ddc84;border:1px solid #b6ffd0}
+  #dshop .row button.no{background:#1a1229;color:#5f5583;border-color:#3d2f66}
+  #dshop .row button.eqb{background:#ffd166;color:#3a0f16;border-color:#fff2c0}
+  #dshop #dshopx{padding:10px;border-radius:8px;cursor:pointer;font:700 11px/1 ui-monospace,monospace;
+    color:#ffd166;background:#3a0f16;border:2px solid #8f1f2c}
+
+  /* ── скилы в рейде ── */
+  #dsk{position:absolute;left:50%;transform:translateX(-50%);bottom:12px;z-index:26;
+    display:none;gap:6px;pointer-events:none}
+  #dsk.on{display:flex}
+  #dsk button{pointer-events:auto;width:48px;height:44px;border-radius:9px;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+    font:700 9px/1.1 ui-monospace,monospace;color:#fff2c0;
+    background:rgba(58,15,22,.72);border:2px solid #8f1f2c;box-shadow:0 3px 0 rgba(0,0,0,.6);
+    touch-action:none;user-select:none;padding:0}
+  #dsk button b{font-size:13px;line-height:1}
+  #dsk button.cd{opacity:.45}
+  #dsk button.off{border-color:#3d2f66;color:#6f6592}
+  #dsk button:active{transform:translateY(2px)}
+
   @media (max-width:520px){
+    #dsk button{width:44px;height:41px;font-size:8px}
+    #dsk button b{font-size:12px}
+    #dshopb{padding:4px 7px;font-size:10px}
     #ddir{grid-template-columns:repeat(3,40px);grid-template-rows:repeat(3,40px);gap:5px}
     #ddir button{font-size:14px}
     #dfire{width:74px;height:74px;font-size:11px}
@@ -73,7 +122,7 @@
 <canvas id="game"></canvas>
 <div id="rot">Поверните устройство горизонтально</div>
 <div id="dw">
-  <div id="dtop"><b>ХОМЯК-РЕЙД</b><span id="dst">готов</span><button id="dback" type="button">← НАЗАД</button></div>
+  <div id="dtop"><b>ХОМЯК-РЕЙД</b><span id="dst">готов</span><button id="dshopb" type="button">🛒</button><button id="dback" type="button">← НАЗАД</button></div>
   <div id="dstg">
     <canvas id="dgame"></canvas>
     <div id="dctl">
@@ -83,6 +132,17 @@
         <span></span><button type="button" data-k="b">▼</button><span></span>
       </div>
       <button type="button" id="dfire">ОГОНЬ</button>
+    </div>
+    <div id="dsk"></div>
+    <div id="dshop">
+      <div class="dh">ОРУЖИЕ И УМЕНИЯ <b id="dshopg">0</b></div>
+      <div class="dtabs">
+        <button type="button" id="dtabw" class="on">ОРУЖИЕ</button>
+        <button type="button" id="dtabs">УМЕНИЯ</button>
+      </div>
+      <div class="dnote" id="dshopn"></div>
+      <div class="dlist" id="dshopls"></div>
+      <button type="button" id="dshopx">ЗАКРЫТЬ</button>
     </div>
     <div id="dpick">
       <div class="ham">🐹</div>
@@ -354,6 +414,7 @@ const G = {
   relics: {},
   daily: { last: 0, streak: 0 },
   auto: { buy: false },
+  raid: { w: { fists: 1 }, eq: 'fists' },
   stats: { taps: 0, crits: 0, bosses: 0, deaths: 0, bestCombo: 0, bestDps: 0, runsStart: Date.now() }
 };
 
@@ -418,6 +479,18 @@ SKILLS.meteor.price = 1400;
 SKILLS.heal.price = 320;
 const skCd = { strike: 0, tornado: 0, meteor: 0, heal: 0, ult: 0 };
 const SKORDER = ['strike', 'tornado', 'meteor', 'heal'];
+
+/* ====================== ОРУЖИЕ РЕЙДА ======================
+   Один баланс золота с айдл-игрой. fists — стартовое, бесплатно. */
+const WEAPONS = {
+  fists:   { price: 0,    dmg: 9,  cd: 0.30, rng: 2.2, melee: true,  name: 'КУЛАКИ',      desc: 'ближний бой, быстро' },
+  bat:     { price: 260,  dmg: 20, cd: 0.42, rng: 2.6, melee: true,  name: 'БИТА',        desc: 'тяжёлый ближний удар' },
+  pistol:  { price: 700,  dmg: 17, cd: 0.24, rng: 14,  melee: false, name: 'ПИСТОЛЕТ',    desc: 'дальний бой' },
+  shotgun: { price: 1800, dmg: 34, cd: 0.52, rng: 8,   melee: false, name: 'ДРОБОВИК',    desc: 'урон вблизи' },
+  plasma:  { price: 4200, dmg: 52, cd: 0.30, rng: 16,  melee: false, name: 'ПЛАЗМА',      desc: 'мощный дальний' },
+  rail:    { price: 9000, dmg: 95, cd: 0.62, rng: 22,  melee: false, name: 'РЕЙЛГАН',     desc: 'снайперский выстрел' }
+};
+const WEAPORDER = ['fists', 'bat', 'pistol', 'shotgun', 'plasma', 'rail'];
 
 /* ============================== FLAVOUR ============================== */
 const FLAV = {
@@ -550,7 +623,7 @@ function save() {
       playTime: G.playTime, lastSeen: G.lastSeen, sound: G.sound, music: G.music,
       up: G.up, sk: G.sk, skin: G.skin, skinsOwned: G.skinsOwned, ach: G.ach,
       relics: G.relics, daily: G.daily,
-      auto: G.auto, stats: G.stats
+      auto: G.auto, stats: G.stats, raid: G.raid
     };
     localStorage.setItem(KEY, JSON.stringify(d));
   } catch (e) {}
@@ -572,6 +645,10 @@ function load() {
     if (d.relics && typeof d.relics === 'object') G.relics = d.relics;
     if (d.daily && typeof d.daily === 'object') G.daily = d.daily;
     if (d.auto) G.auto = d.auto;
+    if (d.raid && typeof d.raid === 'object') {
+      if (d.raid.w && typeof d.raid.w === 'object') G.raid.w = d.raid.w;
+      if (typeof d.raid.eq === 'string') G.raid.eq = d.raid.eq;
+    }
     if (d.stats) Object.assign(G.stats, d.stats);
     if (typeof d.sound === 'boolean') G.sound = d.sound;
     G.lastSeen = d.lastSeen || Date.now();
@@ -3007,8 +3084,19 @@ const Doom = (() => {
   let hp = 100, score = 0, kills = 0, wave = 1, banned = 0;
   let mobs = [], shots = [], parts = [], pickups = [];
   let cool = 0, hurt = 0, flash = 0, msg = '', msgT = 0;
-  let animT = 0, bob = 0, recoil = 0, dead = false, frames = 0;
+  let animT = 0, bob = 0, recoil = 0, dead = false, frames = 0, regen = 0;
+  let punch = 0, punchSide = 1;
+  let shopTab = 'w', shopOn = false;
+  const rcd = { strike: 0, tornado: 0, meteor: 0, heal: 0 };
   const keys = { f: 0, b: 0, l: 0, r: 0, fire: 0 };
+
+  const SKICON = { strike: '⚡', tornado: '🌀', meteor: '☄', heal: '✚' };
+  const SKNAME = { strike: 'УДАР', tornado: 'ВИХРЬ', meteor: 'МЕТЕОР', heal: 'ЛЕЧ' };
+
+  function wpn() { return WEAPONS[G.raid.eq] || WEAPONS.fists; }
+  function skillCost(id) { const lv = G.sk[id] || 0; return Math.ceil(SKILLS[id].price * Math.pow(2.6, lv)); }
+  /* урон рейда масштабируется теми же апгрейдами, что и в айдле */
+  function dmgMul() { const st = stats(); return 1 + (st.dmg - 1) * 0.25; }
 
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const rnd = (a, b) => a + Math.random() * (b - a);
@@ -3118,34 +3206,78 @@ const Doom = (() => {
   /* ── стрельба ────────────────────────────────────────────── */
   function shoot() {
     if (cool > 0 || dead) return;
-    cool = 0.22; recoil = 1;
-    beep(rnd(150, 190), 0.08, 'square', 0.06);
+    const w = wpn();
+    cool = w.cd; recoil = 1;
+    punch = 1; punchSide = -punchSide;
+    if (w.melee) beep(rnd(70, 95), 0.07, 'triangle', 0.07);
+    else beep(rnd(150, 190), 0.08, 'square', 0.06);
     const dx = Math.cos(pa), dy = Math.sin(pa);
-    /* попадание: ближайший монстр в конусе */
+    const cone = w.melee ? 0.5 : 0.72;
     let best = null, bestD = 1e9;
     for (const m of mobs) {
       const ddx = m.x - px, ddy = m.y - py;
       const d = Math.hypot(ddx, ddy);
-      if (d > 14 || d < 0.0001) continue;
+      if (d > w.rng || d < 0.0001) continue;
       const dot = (ddx / d) * dx + (ddy / d) * dy;
-      if (dot < 0.72) continue;
-      /* стена между нами? */
+      if (dot < cone) continue;
       if (wallBetween(px, py, m.x, m.y)) continue;
       if (d < bestD) { bestD = d; best = m; }
     }
     if (best) {
-      const dmg = rnd(14, 26);
+      const st = stats();
+      let dmg = w.dmg * dmgMul();
+      const isCrit = Math.random() < st.crit;
+      if (isCrit) dmg *= st.cdmg;
       best.hp -= dmg; best.hurt = 0.18;
-      for (let i = 0; i < 7; i++) parts.push({ x: best.x, y: best.y, vx: rnd(-1.6, 1.6), vy: rnd(-1.6, 1.6), life: rnd(0.2, 0.5), col: best.t.eye });
+      const pn = w.melee ? 9 : 7;
+      for (let i = 0; i < pn; i++) parts.push({ x: best.x, y: best.y, vx: rnd(-1.6, 1.6), vy: rnd(-1.6, 1.6), life: rnd(0.2, 0.5), col: isCrit ? '#ffd166' : best.t.eye });
       if (best.hp <= 0) {
         score += best.t.pts; kills++;
+        /* общий баланс: золото в айдл-игру */
+        const gain = Math.max(1, Math.round(best.t.pts * 0.6));
+        G.gold += gain; G.totalGold += gain; G.kills++;
         for (let i = 0; i < 14; i++) parts.push({ x: best.x, y: best.y, vx: rnd(-2.4, 2.4), vy: rnd(-2.4, 2.4), life: rnd(0.3, 0.8), col: '#ff5566' });
         mobs.splice(mobs.indexOf(best), 1);
         beep(rnd(70, 100), 0.16, 'sawtooth', 0.07);
         if (mobs.length === 0) { wave++; msg = 'ВОЛНА ' + wave; msgT = 2; spawnMobs(4 + wave * 2); }
-      } else beep(rnd(300, 380), 0.05, 'triangle', 0.04);
+      } else if (!w.melee) beep(rnd(300, 380), 0.05, 'triangle', 0.04);
     }
-    flash = 0.09;
+    flash = w.melee ? 0.04 : 0.09;
+  }
+
+  /* ── умения рейда: те же SKILLS / G.sk, что в айдле ─────── */
+  function raidSkill(id) {
+    if (dead) return;
+    if ((G.sk[id] || 0) <= 0) { msg = 'УМЕНИЕ НЕ КУПЛЕНО'; msgT = 1.4; return; }
+    if (rcd[id] > 0) return;
+    rcd[id] = SKILLS[id].cd;
+    const st = stats();
+    const lv = G.sk[id] || 0;
+    beep(id === 'heal' ? 520 : 300, 0.16, 'sine', 0.07);
+    if (id === 'heal') {
+      const heal = st.maxHP * (0.25 + lv * 0.12);
+      hp = Math.min(100, hp + heal);
+      msg = '+' + Math.round(heal) + ' HP'; msgT = 1.4;
+      return;
+    }
+    const mul = { strike: 12, tornado: 8, meteor: 30 }[id] || 8;
+    const dmg = st.dmg * mul * (1 + lv * 0.5) * 0.5;
+    let n = 0;
+    for (const m of mobs.slice()) {
+      const d = Math.hypot(m.x - px, m.y - py);
+      if (d > (id === 'meteor' ? 6 : id === 'tornado' ? 5 : 3.4)) continue;
+      m.hp -= dmg; m.hurt = 0.2; n++;
+      for (let i = 0; i < 10; i++) parts.push({ x: m.x, y: m.y, vx: rnd(-2.4, 2.4), vy: rnd(-2.4, 2.4), life: rnd(0.2, 0.6), col: SKILLS[id].col });
+      if (m.hp <= 0) {
+        score += m.t.pts; kills++;
+        const gain = Math.max(1, Math.round(m.t.pts * 0.6));
+        G.gold += gain; G.totalGold += gain; G.kills++;
+        mobs.splice(mobs.indexOf(m), 1);
+      }
+    }
+    flash = 0.10;
+    msg = (SKNAME[id] || id) + (n ? ' ×' + n : ' ПУСТО'); msgT = 1.3;
+    if (mobs.length === 0) { wave++; spawnMobs(4 + wave * 2); msg = 'ВОЛНА ' + wave; msgT = 2; }
   }
 
   function wallBetween(x0, y0, x1, y1) {
@@ -3213,17 +3345,18 @@ const Doom = (() => {
     }
     if (!tgt) return;
     const sp = 2.5;
-    /* ── если цель видна: стоим, доворачиваемся, стреляем ── */
+    const w = wpn();
+    const ideal = Math.max(1.1, w.rng * 0.8);
+    /* ── если цель видна: доворачиваемся, подходим на дистанцию, бьём ── */
     if (vis) {
       const want = Math.atan2(tgt.y - py, tgt.x - px);
       let diff = want - pa;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
       pa += clamp(diff, -6.5 * dt, 6.5 * dt);
-      /* чуть отходим, если моб вплотную */
-      if (bd < 1.9) move(Math.cos(want + Math.PI) * sp * dt, Math.sin(want + Math.PI) * sp * dt);
-      else if (bd > 11) move(Math.cos(want) * sp * dt, Math.sin(want) * sp * dt);
-      if (Math.abs(diff) < 0.55) shoot();
+      if (bd > ideal + 0.35) move(Math.cos(want) * sp * dt, Math.sin(want) * sp * dt);
+      else if (!w.melee && bd < ideal - 3) move(Math.cos(want + Math.PI) * sp * dt, Math.sin(want + Math.PI) * sp * dt);
+      if (Math.abs(diff) < 0.55 && bd <= w.rng * 0.92) shoot();
       return;
     }
     /* ── цели не видно: идём по BFS к ней ── */
@@ -3253,7 +3386,14 @@ const Doom = (() => {
     flash = Math.max(0, flash - dt);
     hurt = Math.max(0, hurt - dt);
     recoil = Math.max(0, recoil - dt * 6);
+    punch = Math.max(0, punch - dt * 5.5);
+    for (const k in rcd) if (rcd[k] > 0) rcd[k] = Math.max(0, rcd[k] - dt);
     if (msgT > 0) msgT -= dt;
+    /* регенерация, если давно не били */
+    if (!dead) {
+      regen = hurt > 0 ? 0 : regen + dt;
+      if (regen > 3.5) hp = Math.min(100, hp + dt * 2.2);
+    }
 
     if (mode === 'auto') autoBrain(dt);
     else {
@@ -3284,8 +3424,8 @@ const Doom = (() => {
         if (!solid(nx, m.y)) m.x = nx;
         if (!solid(m.x, ny)) m.y = ny;
       } else if (m.cd <= 0) {
-        hp -= m.t.hp > 60 ? 14 : m.t.hp > 40 ? 9 : 6;
-        m.cd = rnd(0.9, 1.7);
+        hp -= m.t.hp > 60 ? 9 : m.t.hp > 40 ? 6 : 4;
+        m.cd = rnd(1.2, 2.1);
         hurt = 0.28; beep(rnd(90, 130), 0.12, 'sawtooth', 0.07);
         if (hp <= 0) { hp = 0; dead = true; msg = 'ХОМЯК ПАЛ • ОЧКОВ ' + score; msgT = 99; setStatus('конец'); }
       }
@@ -3465,100 +3605,142 @@ const Doom = (() => {
     }
   }
 
-  /* ── хомяк-стрелок от первого лица ───────────────────────── */
+  /* ── хомяк от первого лица: видны только лапы ─────────────── */
   function drawHamster(W, H) {
-    const b = Math.sin(bob) * H * 0.014;
-    const r = recoil * H * 0.035;
-    const cxp = W * 0.64;
-    const by = H * 0.92 + b + r;
+    const w = wpn();
+    const b = Math.sin(bob) * H * 0.016;
     const sc = H / 1000;
+    const sway = Math.sin(bob * 0.5) * H * 0.008;
+    const ext = w.melee ? punch * 0.55 : recoil * 0.5;   /* вылет руки вперёд */
+    const kick = w.melee ? punch : recoil;
 
-    cx.save();
-    cx.translate(cxp, by);
-    cx.scale(sc, sc);
+    /* ── левая лапа ── */
+    const lo = w.melee ? 0 : H * 0.13;
+    drawPaw(W * (w.melee ? 0.225 : 0.16) + sway, H * 0.93 + lo + b + H * 0.10 * ext, sc * 1.65, -0.30 - kick * 0.14, kick * 0.22, 0);
 
-    /* ── пушка ── */
-    const gx = -118, gy = -238;
-    cx.fillStyle = '#241a2e';
-    cx.fillRect(gx - 13, gy + 22, 26, 132);
-    cx.fillStyle = '#3b2c47';
-    cx.fillRect(gx - 17, gy, 34, 46);
-    cx.fillStyle = '#5a4468';
-    cx.fillRect(gx - 17, gy, 34, 9);
-    cx.fillStyle = '#ffd166';
-    cx.fillRect(gx - 4, gy + 16, 8, 14);
-    if (flash > 0.02) {
-      cx.globalAlpha = Math.min(1, flash * 9);
-      cx.fillStyle = '#fff3b0';
-      cx.beginPath(); cx.arc(gx, gy - 10, 30, 0, 6.2832); cx.fill();
-      cx.fillStyle = '#ffb347';
-      cx.beginPath(); cx.arc(gx, gy - 10, 17, 0, 6.2832); cx.fill();
-      cx.globalAlpha = 1;
-    }
+    /* ── ствол/оружие: рисуем ДО правой лапы, чтобы лапа держала рукоять ── */
+    if (!w.melee) {
+      const gx = W * 0.585 - sway * 0.6, gy = H * 1.10 + b + H * 0.07 * ext;
+      cx.save();
+      cx.translate(gx, gy);
+      cx.rotate(-0.06 + kick * 0.16);
+      cx.scale(sc * 2.0, sc * 2.0);
+      /* приклад/рукоять */
+      cx.fillStyle = '#241a2e';
+      cx.beginPath();
+      cx.moveTo(-30, -26); cx.lineTo(30, -26);
+      cx.lineTo(44, 130); cx.lineTo(-12, 130);
+      cx.closePath(); cx.fill();
+      /* корпус-затвор */
+      cx.fillStyle = '#3b2c47';
+      cx.fillRect(-40, -132, 80, 110);
+      cx.fillStyle = '#5a4468';
+      cx.fillRect(-40, -132, 80, 18);
+      /* ствол */
+      cx.fillStyle = '#1b1322';
+      cx.fillRect(-19, -262, 38, 134);
+      cx.fillStyle = '#2b2036';
+      cx.fillRect(-19, -262, 38, 13);
+      /* дуло */
+      cx.fillStyle = '#08050c';
+      cx.beginPath(); cx.ellipse(0, -262, 19, 8, 0, 0, 6.2832); cx.fill();
+      /* целик */
+      cx.fillStyle = '#151020';
+      cx.fillRect(-27, -132, 54, 11);
+      /* неон */
+      cx.fillStyle = '#ffd166';
+      cx.fillRect(-11, -122, 22, 30);
+      cx.fillRect(-7, -248, 14, 13);
+      cx.fillStyle = 'rgba(255,209,102,.4)';
+      cx.fillRect(-40, -132, 80, 4);
+      cx.restore();
 
-    /* ── тело / плечи ── */
-    cx.fillStyle = '#c98a52';
-    cx.beginPath(); cx.ellipse(0, 20, 168, 150, 0, Math.PI, 0); cx.fill();
-    cx.fillStyle = '#f0bc82';
-    cx.beginPath(); cx.ellipse(0, 26, 140, 126, 0, Math.PI, 0); cx.fill();
-
-    /* ── уши ── */
-    const earY = -132;
-    cx.fillStyle = '#c98a52';
-    cx.beginPath(); cx.ellipse(-104, earY, 30, 34, -0.25, 0, 6.2832); cx.fill();
-    cx.beginPath(); cx.ellipse(104, earY, 30, 34, 0.25, 0, 6.2832); cx.fill();
-    cx.fillStyle = '#f0a7a7';
-    cx.beginPath(); cx.ellipse(-104, earY, 17, 20, -0.25, 0, 6.2832); cx.fill();
-    cx.beginPath(); cx.ellipse(104, earY, 17, 20, 0.25, 0, 6.2832); cx.fill();
-
-    /* ── голова ── */
-    cx.fillStyle = '#e0a163';
-    cx.beginPath(); cx.ellipse(0, -96, 118, 104, 0, 0, 6.2832); cx.fill();
-    /* морда */
-    cx.fillStyle = '#f7dcb4';
-    cx.beginPath(); cx.ellipse(0, -58, 66, 50, 0, 0, 6.2832); cx.fill();
-
-    /* глаза */
-    cx.fillStyle = '#1a0f1e';
-    cx.beginPath(); cx.ellipse(-46, -112, 15, 18, 0, 0, 6.2832); cx.fill();
-    cx.beginPath(); cx.ellipse(46, -112, 15, 18, 0, 0, 6.2832); cx.fill();
-    cx.fillStyle = '#ffffff';
-    cx.beginPath(); cx.arc(-50, -118, 5.5, 0, 6.2832); cx.fill();
-    cx.beginPath(); cx.arc(42, -118, 5.5, 0, 6.2832); cx.fill();
-
-    /* нос + рот */
-    cx.fillStyle = '#e07b8b';
-    cx.beginPath(); cx.ellipse(0, -76, 11, 8.5, 0, 0, 6.2832); cx.fill();
-    cx.strokeStyle = '#a2565f'; cx.lineWidth = 3; cx.lineCap = 'round';
-    cx.beginPath();
-    cx.moveTo(0, -68); cx.lineTo(0, -61);
-    cx.moveTo(0, -61); cx.quadraticCurveTo(-13, -53, -21, -60);
-    cx.moveTo(0, -61); cx.quadraticCurveTo(13, -53, 21, -60);
-    cx.stroke();
-
-    /* усы */
-    cx.strokeStyle = 'rgba(60,30,20,.55)'; cx.lineWidth = 2.2;
-    for (const s of [-1, 1]) {
-      for (let i = 0; i < 3; i++) {
-        const y0 = -74 + i * 9;
-        cx.beginPath();
-        cx.moveTo(s * 30, y0);
-        cx.quadraticCurveTo(s * 62, y0 - 6 + i * 4, s * 88, y0 - 12 + i * 9);
-        cx.stroke();
+      if (flash > 0.02) {
+        const fx = gx + H * 0.012, fy = gy - H * 0.58;
+        cx.globalAlpha = Math.min(1, flash * 8);
+        cx.fillStyle = '#fff3b0';
+        cx.beginPath(); cx.arc(fx, fy, H * 0.075, 0, 6.2832); cx.fill();
+        cx.fillStyle = '#ffb347';
+        cx.beginPath(); cx.arc(fx, fy, H * 0.04, 0, 6.2832); cx.fill();
+        cx.globalAlpha = 1;
       }
     }
 
-    /* ── лапы на пушке ── */
-    cx.fillStyle = '#d9a066';
-    cx.beginPath(); cx.ellipse(gx + 4, gy + 96, 30, 25, 0.15, 0, 6.2832); cx.fill();
-    cx.fillStyle = '#c98a52';
-    cx.beginPath(); cx.ellipse(-58, -18, 34, 28, -0.4, 0, 6.2832); cx.fill();
-    /* пальчики */
-    cx.strokeStyle = '#a9713c'; cx.lineWidth = 2.5;
-    for (let i = -1; i <= 1; i++) {
+    /* ── правая лапа (бьющая / держит оружие) ── */
+    drawPaw(W * (w.melee ? 0.775 : 0.63) - sway, H * (w.melee ? 0.93 : 1.00) + b + H * 0.13 * ext, sc * 1.75, 0.30 + kick * 0.18, -kick * 0.30, 1);
+
+    if (w.melee && kick > 0.05) {
+      /* след удара кулаком */
+      cx.globalAlpha = kick * 0.55;
+      cx.strokeStyle = '#fff3b0';
+      cx.lineWidth = Math.max(2, H * 0.006);
+      const hx = W * 0.765 - sway, hy = H * 0.80 + b;
       cx.beginPath();
-      cx.moveTo(gx + i * 11, gy + 82);
-      cx.lineTo(gx + i * 11, gy + 108);
+      cx.arc(hx, hy, H * (0.07 + kick * 0.05), -2.4, 0.5);
+      cx.stroke();
+      cx.globalAlpha = 1;
+    }
+  }
+
+  /* лапа: сжатый кулак, dir=1 правая */
+  function drawPaw(x, y, s, rot, tilt, dir) {
+    cx.save();
+    cx.translate(x, y);
+    cx.rotate(rot + tilt * 0.35);
+    cx.scale(s, s);
+
+    /* предплечье-шерсть, уходит вниз */
+    const gr = cx.createLinearGradient(0, -20, 0, 300);
+    gr.addColorStop(0, '#c98a52'); gr.addColorStop(1, '#8a5a30');
+    cx.fillStyle = gr;
+    cx.beginPath();
+    cx.moveTo(-108, 300); cx.lineTo(-86, -20);
+    cx.lineTo(86, -20); cx.lineTo(108, 300);
+    cx.closePath(); cx.fill();
+    /* тёмная кромка рукава */
+    cx.fillStyle = 'rgba(40,20,45,.55)';
+    cx.beginPath();
+    cx.moveTo(-112, 300); cx.lineTo(-104, 210);
+    cx.lineTo(104, 210); cx.lineTo(112, 300);
+    cx.closePath(); cx.fill();
+
+    /* сам кулак */
+    cx.fillStyle = '#dc9a5e';
+    cx.beginPath(); cx.ellipse(0, -46, 100, 92, 0, 0, 6.2832); cx.fill();
+    cx.strokeStyle = 'rgba(90,50,20,.45)'; cx.lineWidth = 3;
+    cx.beginPath(); cx.ellipse(0, -46, 100, 92, 0, 0, 6.2832); cx.stroke();
+
+    /* костяшки — четыре бугра сверху */
+    cx.fillStyle = '#e8a968';
+    for (let i = 0; i < 4; i++) {
+      const fx = -63 + i * 42;
+      const r = i === 1 || i === 2 ? 30 : 27;
+      cx.beginPath(); cx.ellipse(fx, -96, r, r * 0.92, 0, 0, 6.2832); cx.fill();
+    }
+    /* бороздки между пальцами — от костяшек вниз */
+    cx.strokeStyle = 'rgba(140,85,42,.65)';
+    cx.lineWidth = 3.6; cx.lineCap = 'round';
+    for (let i = 0; i < 3; i++) {
+      const fx = -42 + i * 42;
+      cx.beginPath();
+      cx.moveTo(fx, -120);
+      cx.quadraticCurveTo(fx, -80, fx * 1.08, -24);
+      cx.stroke();
+    }
+    /* складка большого пальца */
+    cx.strokeStyle = 'rgba(140,85,42,.5)';
+    cx.lineWidth = 4.5;
+    cx.beginPath();
+    cx.arc(dir ? -10 : 10, 6, 62, Math.PI * 1.12, Math.PI * 1.82);
+    cx.stroke();
+
+    /* шерстинки на запястье */
+    cx.strokeStyle = 'rgba(90,55,25,.35)';
+    cx.lineWidth = 2.6;
+    for (let i = -3; i <= 3; i++) {
+      cx.beginPath();
+      cx.moveTo(i * 24, 34);
+      cx.lineTo(i * 28, 180);
       cx.stroke();
     }
     cx.restore();
@@ -3601,13 +3783,136 @@ const Doom = (() => {
     cx.textBaseline = 'alphabetic';
   }
 
+  /* ── скилы-кнопки в ручном режиме ─────────────────────────── */
+  function buildSkills() {
+    const bar = el('dsk');
+    if (!bar || bar.dataset.b) return;
+    bar.dataset.b = '1';
+    bar.innerHTML = SKORDER.map((id) =>
+      '<button type="button" data-s="' + id + '"><b>' + (SKICON[id] || '?') + '</b>' + (SKNAME[id] || id) + '</button>'
+    ).join('');
+    bar.querySelectorAll('button[data-s]').forEach((b) => {
+      const id = b.dataset.s;
+      b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); actx(); raidSkill(id); });
+      b.addEventListener('contextmenu', (e) => e.preventDefault());
+    });
+  }
+
+  function updSkills() {
+    const bar = el('dsk');
+    if (!bar) return;
+    bar.querySelectorAll('button[data-s]').forEach((b) => {
+      const id = b.dataset.s;
+      const lv = G.sk[id] || 0;
+      const cd = rcd[id] || 0;
+      b.classList.toggle('off', lv <= 0);
+      b.classList.toggle('cd', cd > 0);
+    });
+  }
+
+  /* ── магазин рейда ────────────────────────────────────────── */
+  function openShop(on) {
+    shopOn = !!on;
+    const s = el('dshop');
+    if (s) s.classList.toggle('on', shopOn);
+    if (shopOn) renderShop();
+  }
+
+  function renderShop() {
+    const ls = el('dshopls'), g = el('dshopg'), note = el('dshopn');
+    if (!ls) return;
+    if (g) g.textContent = fmt(Math.floor(G.gold)) + ' 💰';
+    if (note) note.textContent = 'ОДИН БАЛАНС С ОСНОВНОЙ ИГРОЙ • ДОБЫВАЙ В РЕЙДЕ';
+    ls.innerHTML = '';
+    if (shopTab === 'w') {
+      for (const id of WEAPORDER) {
+        const w = WEAPONS[id];
+        const own = !!G.raid.w[id];
+        const eq = G.raid.eq === id;
+        const row = document.createElement('div');
+        row.className = 'row' + (eq ? ' eq' : own ? ' own' : '');
+        row.innerHTML = '<div class="nm">' + w.name + '<i>' + w.desc + ' • ' + Math.round(w.dmg * dmgMul()) + ' урон' + (w.melee ? '' : ' • ' + w.rng + 'м') + '</i></div>';
+        const b = document.createElement('button');
+        if (eq) { b.className = 'eqb'; b.textContent = 'В РУКАХ'; b.disabled = true; }
+        else if (own) { b.textContent = 'ВЗЯТЬ'; b.onclick = () => { G.raid.eq = id; save(); Sfx.buy(); renderShop(); }; }
+        else {
+          const afford = G.gold >= w.price;
+          b.className = afford ? '' : 'no';
+          b.textContent = fmt(w.price) + ' 💰';
+          b.onclick = () => {
+            if (G.gold < w.price) { flashNote('НЕ ХВАТАЕТ ' + fmt(w.price - Math.floor(G.gold))); Sfx.bad(); return; }
+            G.gold -= w.price; G.raid.w[id] = 1; G.raid.eq = id;
+            Sfx.buy(); HAP('buy'); save(); renderShop();
+          };
+        }
+        row.appendChild(b);
+        ls.appendChild(row);
+      }
+    } else {
+      for (const id of SKORDER) {
+        const lv = G.sk[id] || 0;
+        const maxed = lv >= 5;
+        const c = skillCost(id);
+        const zoneOk = G.zone >= SKILLS[id].zoneReq;
+        const row = document.createElement('div');
+        row.className = 'row' + (lv > 0 ? ' own' : '');
+        row.innerHTML = '<div class="nm">' + (SKICON[id] || '') + ' ' + (SKNAME[id] || id) +
+          '<i>УР.' + lv + '/5 • ' + (zoneOk ? (maxed ? 'МАКСИМУМ' : fmt(c) + ' 💰') : 'НУЖНА ЗОНА ' + SKILLS[id].zoneReq) + '</i></div>';
+        const b = document.createElement('button');
+        if (maxed) { b.className = 'no'; b.textContent = 'МАКС'; b.disabled = true; }
+        else if (!zoneOk) { b.className = 'no'; b.textContent = 'ЗОНА ' + SKILLS[id].zoneReq; b.disabled = true; }
+        else {
+          const afford = G.gold >= c;
+          b.className = afford ? '' : 'no';
+          b.textContent = fmt(c);
+          b.onclick = () => {
+            if (G.gold < c) { flashNote('НЕ ХВАТАЕТ ' + fmt(c - Math.floor(G.gold))); Sfx.bad(); return; }
+            G.gold -= c; G.sk[id] = lv + 1;
+            Sfx.buy(); HAP('buy'); save(); renderShop(); buildSkills(); updSkills();
+          };
+        }
+        row.appendChild(b);
+        ls.appendChild(row);
+      }
+    }
+  }
+
+  let noteT = 0;
+  function flashNote(t) {
+    const n = el('dshopn');
+    if (!n) return;
+    n.textContent = t; noteT = 1.6;
+  }
+
+  function bindShop() {
+    const b = el('dshopb'), x = el('dshopx'), tw = el('dtabw'), ts = el('dtabs2') || el('dtabs');
+    if (b && !b.dataset.b) { b.dataset.b = '1'; b.addEventListener('click', (e) => { e.preventDefault(); actx(); HAP('hit'); openShop(!shopOn); }); }
+    if (x && !x.dataset.b) { x.dataset.b = '1'; x.addEventListener('click', (e) => { e.preventDefault(); openShop(false); }); }
+    const tabsEl = el('dshop');
+    if (tabsEl) {
+      const tb = tabsEl.querySelectorAll('.dtabs button');
+      tb.forEach((btn) => {
+        if (btn.dataset.b) return;
+        btn.dataset.b = '1';
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          shopTab = btn.id === 'dtabw' ? 'w' : 's';
+          tb.forEach((o) => o.classList.toggle('on', o === btn));
+          renderShop();
+        });
+      });
+    }
+  }
+
   /* ── цикл ────────────────────────────────────────────────── */
   function loop(t) {
     if (!running) return;
     const dt = Math.min(0.05, (t - last) / 1000 || 0.016);
     last = t;
-    update(dt);
+    if (!shopOn) update(dt);
+    else { if (noteT > 0) { noteT -= dt; if (noteT <= 0) { const n = el('dshopn'); if (n) n.textContent = 'ОДИН БАЛАНС С ОСНОВНОЙ ИГРОЙ • ДОБЫВАЙ В РЕЙДЕ'; } } }
     render();
+    updSkills();
     frames++;
     raf = requestAnimationFrame(loop);
   }
@@ -3629,6 +3934,7 @@ const Doom = (() => {
     newLevel();
     const pick = el('dpick'); if (pick) pick.classList.remove('on');
     const ctl = el('dctl'); if (ctl) ctl.classList.toggle('on', m === 'manual');
+    const sk = el('dsk'); if (sk) sk.classList.toggle('on', m === 'manual');
     resizeCanvas();
     actx();
     if (!running) { running = true; last = performance.now(); raf = requestAnimationFrame(loop); }
@@ -3689,6 +3995,7 @@ const Doom = (() => {
     const pick = el('dpick');
     if (pick) pick.classList.add('on');
     const ctl = el('dctl'); if (ctl) ctl.classList.remove('on');
+    const sk = el('dsk'); if (sk) sk.classList.remove('on');
     setStatus('выбери режим');
     mode = null; running = false;
     if (raf) { cancelAnimationFrame(raf); raf = 0; }
@@ -3702,6 +4009,10 @@ const Doom = (() => {
     cx = cvs ? cvs.getContext('2d', { alpha: false }) : null;
     bindControls();
     bindPadsHooks();
+    bindShop();
+    buildSkills();
+    updSkills();
+    openShop(false);
     resizeCanvas();
     showPick();
     try {
@@ -3726,6 +4037,7 @@ const Doom = (() => {
     if (raf) { cancelAnimationFrame(raf); raf = 0; }
     mode = null;
     mobs = []; parts = []; shots = [];
+    openShop(false);
     keys.f = keys.b = keys.l = keys.r = keys.fire = 0;
     try { if (AC && AC.state === 'running') AC.suspend(); } catch (e) {}
   }
