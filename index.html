@@ -8,6 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Звёздный Рейд</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%90%B9%3C/text%3E%3C/svg%3E">
 <script async src="https://telegram.org/js/telegram-web-app.js" onerror="window.__tgFail=1"></script>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -66,7 +67,7 @@
   #ddead button:active{transform:translateY(3px);box-shadow:0 2px 0 #3a0f16}
 
   /* управление — только в ручном режиме */
-  #dctl{position:absolute;inset:0;z-index:25;pointer-events:none;display:none}
+  #dctl{position:absolute;inset:0;z-index:30;pointer-events:none;display:none}
   #dctl.on{display:block}
   #ddir{position:absolute;left:10px;bottom:14px;display:grid;gap:6px;pointer-events:none;
     grid-template-columns:repeat(3,46px);grid-template-rows:repeat(3,46px)}
@@ -110,9 +111,9 @@
   #dshop #dshopx{padding:10px;border-radius:8px;cursor:pointer;font:700 11px/1 ui-monospace,monospace;
     color:#ffd166;background:#3a0f16;border:2px solid #8f1f2c}
 
-  /* ── скилы в рейде ── */
-  #dsk{position:absolute;left:50%;transform:translateX(-50%);bottom:12px;z-index:26;
-    display:none;gap:6px;pointer-events:none}
+  /* ── скилы в рейде: вертикальный столбик справа над «ОГОНЬ» ── */
+  #dsk{position:absolute;right:14px;bottom:118px;z-index:27;
+    display:none;flex-direction:column;gap:6px;pointer-events:none}
   #dsk.on{display:flex}
   #dsk button{pointer-events:auto;width:48px;height:44px;border-radius:9px;cursor:pointer;
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
@@ -438,7 +439,7 @@ const G = {
   relics: {},
   daily: { last: 0, streak: 0 },
   auto: { buy: false },
-  raid: { w: { fists: 1 }, eq: 'fists' },
+  raid: { w: { fists: 1 }, eq: 'fists', best: { wave: 0, score: 0 } },
   stats: { taps: 0, crits: 0, bosses: 0, deaths: 0, bestCombo: 0, bestDps: 0, runsStart: Date.now() }
 };
 
@@ -672,6 +673,10 @@ function load() {
     if (d.raid && typeof d.raid === 'object') {
       if (d.raid.w && typeof d.raid.w === 'object') G.raid.w = d.raid.w;
       if (typeof d.raid.eq === 'string') G.raid.eq = d.raid.eq;
+      if (d.raid.best && typeof d.raid.best === 'object') {
+        if (typeof d.raid.best.wave === 'number') G.raid.best.wave = d.raid.best.wave;
+        if (typeof d.raid.best.score === 'number') G.raid.best.score = d.raid.best.score;
+      }
     }
     if (d.stats) Object.assign(G.stats, d.stats);
     if (typeof d.sound === 'boolean') G.sound = d.sound;
@@ -3251,7 +3256,12 @@ const Doom = (() => {
       for (let i = 0; i < 30; i++) parts.push({ x: m.x, y: m.y, vx: rnd(-4, 4), vy: rnd(-4, 4), life: rnd(0.5, 1.3), col: '#ffd166' });
       pickups.push({ x: m.x, y: m.y, hp: 60 });
       msg = 'БОСС ПОВЕРЖЕН! +' + gain; msgT = 2.6;
-    } else if (mobs.length === 0) nextWave();
+    }
+    /* босс мог оказаться последним мобом — волна всё равно должна идти дальше */
+    if (mobs.length === 0) {
+      nextWave();
+      if (m.isBoss) { msg = 'БОСС ПОВЕРЖЕН! +' + gain + ' • ВОЛНА ' + wave; msgT = 2.6; }
+    }
     /* аптечка */
     if (!m.isBoss && (Math.random() < 0.18 || (hp < 45 && Math.random() < 0.45))) {
       pickups.push({ x: m.x, y: m.y, hp: Math.round(rnd(14, 26)) });
@@ -3751,7 +3761,8 @@ const Doom = (() => {
     vis.sort((a, b) => b.dist - a.dist);
     for (const v of vis) {
       const m = v.m;
-      const sc = m.isBoss ? 2.0 : 1;
+      /* босс вплотную не должен закрывать весь экран */
+      const sc = m.isBoss ? clamp(v.dist * 0.45 + 0.55, 0.95, 2.0) : 1;
       const hgt = (H * 0.95) / Math.max(0.5, v.dist) * sc;
       const cxp = W / 2 + Math.tan(v.rel) * (W / 2) / Math.tan(FOV / 2);
       const wdt = hgt * m.t.r * (m.isBoss ? 2.4 : 1.6);
@@ -4553,8 +4564,18 @@ const Doom = (() => {
   function showDead() {
     const d = el('ddead');
     if (!d) return;
+    /* рекорд и награда за новый рекорд */
+    let rec = '';
+    try {
+      const b = G.raid && G.raid.best;
+      if (b) {
+        if (wave > b.wave) { b.wave = wave; rec = '  •  РЕКОРД ВОЛНЫ!'; }
+        if (score > b.score) b.score = score;
+        save();
+      }
+    } catch (e) {}
     const s = el('ddeadst');
-    if (s) s.textContent = 'ВОЛНА ' + wave + '  •  ОЧКОВ ' + score + '\nУБИТО ' + kills + '  •  ЗОЛОТА +' + Math.round(runGold);
+    if (s) s.textContent = 'ВОЛНА ' + wave + '  •  ОЧКОВ ' + score + '\nУБИТО ' + kills + '  •  ЗОЛОТА +' + Math.round(runGold) + rec;
     d.classList.add('on');
     const ctl = el('dctl'); if (ctl) ctl.classList.remove('on');
     const sk = el('dsk'); if (sk) sk.classList.remove('on');
