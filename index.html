@@ -48,6 +48,23 @@
   #dpick #dauto{border-color:#7ef0a0;color:#d8ffe6;
     background:linear-gradient(#1f6b42,#134430);box-shadow:0 5px 0 #08251a}
 
+  /* экран смерти с итогами забега */
+  #ddead{position:absolute;inset:0;z-index:41;display:none;flex-direction:column;
+    align-items:center;justify-content:center;gap:10px;padding:16px;
+    background:radial-gradient(circle at 50% 40%,rgba(60,6,16,.96) 0%,rgba(6,2,10,.98) 74%)}
+  #ddead.on{display:flex}
+  #ddead .ham{font-size:40px;line-height:1}
+  #ddead .ttl{font:700 18px/1.1 ui-monospace,Consolas,monospace;letter-spacing:.16em;color:#ff5b6e}
+  #ddead .stt{font:12px/1.6 ui-monospace,Consolas,monospace;color:#ffd166;text-align:center;
+    white-space:pre-line;letter-spacing:.04em}
+  #ddead button{width:min(72%,260px);padding:13px 10px;border-radius:10px;cursor:pointer;
+    font:700 14px/1.2 ui-monospace,Consolas,monospace;letter-spacing:.08em;
+    color:#ffd166;border:3px solid #ffd166;box-shadow:0 5px 0 #3a0f16;
+    background:linear-gradient(#8f1f2c,#5a1220);touch-action:manipulation}
+  #ddead #dagain{border-color:#7ef0a0;color:#d8ffe6;
+    background:linear-gradient(#1f6b42,#134430);box-shadow:0 5px 0 #08251a}
+  #ddead button:active{transform:translateY(3px);box-shadow:0 2px 0 #3a0f16}
+
   /* управление — только в ручном режиме */
   #dctl{position:absolute;inset:0;z-index:25;pointer-events:none;display:none}
   #dctl.on{display:block}
@@ -149,6 +166,13 @@
       <div class="pt">ВЫБЕРИ РЕЖИМ</div>
       <button type="button" id="dauto">АВТО-БОЙ</button>
       <button type="button" id="dmanual">БЕГАТЬ САМОМУ</button>
+    </div>
+    <div id="ddead">
+      <div class="ham">💀</div>
+      <div class="ttl">ХОМЯК ПАЛ</div>
+      <div class="stt" id="ddeadst">—</div>
+      <button type="button" id="dagain">ЕЩЁ РАЗ</button>
+      <button type="button" id="dexit">ВЫЙТИ</button>
     </div>
   </div>
 </div>
@@ -3085,7 +3109,7 @@ const Doom = (() => {
   let mobs = [], shots = [], parts = [], pickups = [];
   let floats = [], bolts = [], boss = null;
   let combo = 0, comboT = 0, shake = 0, runGold = 0;
-  let cool = 0, hurt = 0, flash = 0, msg = '', msgT = 0;
+  let cool = 0, hurt = 0, flash = 0, msg = '', msgT = 0, ifr = 0;
   let animT = 0, bob = 0, recoil = 0, dead = false, frames = 0, regen = 0;
   let punch = 0, punchSide = 1;
   const STAR = (() => { const a = new Float32Array(42 * 3); for (let i = 0; i < 42; i++) { a[i*3] = Math.random(); a[i*3+1] = Math.random(); a[i*3+2] = Math.random(); } return a; })();
@@ -3200,7 +3224,7 @@ const Doom = (() => {
   function nextWave() {
     wave++;
     msg = 'ВОЛНА ' + wave; msgT = 2;
-    spawnMobs(4 + wave * 2);
+    spawnMobs(Math.min(15, 4 + wave * 2));
   }
 
   /* ── урон по мобу, смерть, дроп ──────────────────────────── */
@@ -3294,8 +3318,10 @@ const Doom = (() => {
       const d = Math.hypot(ddx, ddy);
       if (d > w.rng || d < 0.0001) continue;
       const dot = (ddx / d) * dx + (ddy / d) * dy;
-      if (dot < cone) continue;
-      if (wallBetween(px, py, m.x, m.y)) continue;
+      /* в упор и только в авто-бою — прощаем угол и углы стен */
+      const near = mode === 'auto' && d < 1.15 ? -0.34 : cone;
+      if (dot < near) continue;
+      if (!(mode === 'auto' && d < 1.15) && wallBetween(px, py, m.x, m.y)) continue;
       hits.push({ m, d });
     }
     hits.sort((a, b) => a.d - b.d);
@@ -3407,6 +3433,23 @@ const Doom = (() => {
 
   function autoBrain(dt) {
     if (!mobs.length) return;
+    /* ── отступление при низком HP: держим дистанцию, бьём на отходе ── */
+    let near = 0, nD = 1e9, nX = 0, nY = 0;
+    for (const m of mobs) {
+      const d = Math.hypot(m.x - px, m.y - py);
+      if (d < 2.6) near++;
+      if (d < nD) { nD = d; nX = m.x; nY = m.y; }
+    }
+    if (hp < 48 && near > 1 && nD < 2.4) {
+      const away = Math.atan2(py - nY, px - nX);
+      let da = away - pa;
+      while (da > Math.PI) da -= Math.PI * 2;
+      while (da < -Math.PI) da += Math.PI * 2;
+      pa += clamp(da, -7.0 * dt, 7.0 * dt);
+      move(Math.cos(away) * 3.0 * dt, Math.sin(away) * 3.0 * dt);
+      if (Math.abs(da) > 1.9 && cool <= 0) shoot();
+      return;
+    }
     /* цель — ближайший по прямой видимости, иначе просто ближайший */
     let tgt = null, bd = 1e9, vis = false;
     for (const m of mobs) {
@@ -3457,10 +3500,12 @@ const Doom = (() => {
     cool = Math.max(0, cool - dt);
     flash = Math.max(0, flash - dt);
     hurt = Math.max(0, hurt - dt);
+    ifr = Math.max(0, ifr - dt);
     recoil = Math.max(0, recoil - dt * 6);
     punch = Math.max(0, punch - dt * 5.5);
     for (const k in rcd) if (rcd[k] > 0) rcd[k] = Math.max(0, rcd[k] - dt);
     if (msgT > 0) msgT -= dt;
+    if (dead) return;
     /* регенерация, если давно не били */
     if (!dead) {
       regen = hurt > 0 ? 0 : regen + dt;
@@ -3496,13 +3541,13 @@ const Doom = (() => {
         const nx = m.x + (dx / d) * st, ny = m.y + (dy / d) * st;
         if (!solid(nx, m.y)) m.x = nx;
         if (!solid(m.x, ny)) m.y = ny;
-      } else if (m.cd <= 0) {
-        const dmg = m.isBoss ? 11 : m.t.hp > 60 ? 7 : m.t.hp > 40 ? 5 : 3;
+      } else if (m.cd <= 0 && ifr <= 0) {
+        const dmg = m.isBoss ? 8 : m.t.hp > 60 ? 5 : m.t.hp > 40 ? 4 : 2;
         hp -= dmg;
-        m.cd = m.isBoss ? rnd(1.8, 2.4) : rnd(1.4, 2.3);
-        hurt = 0.28; shake = Math.max(shake, m.isBoss ? 0.45 : 0.2);
+        m.cd = m.isBoss ? rnd(2.0, 2.6) : rnd(1.5, 2.4);
+        hurt = 0.28; ifr = 0.42; shake = Math.max(shake, m.isBoss ? 0.45 : 0.2);
         beep(rnd(90, 130), 0.12, 'sawtooth', 0.07);
-        if (hp <= 0) { hp = 0; dead = true; msg = 'ХОМЯК ПАЛ • ОЧКОВ ' + score; msgT = 99; setStatus('конец'); }
+        if (hp <= 0) { hp = 0; dead = true; msg = 'ХОМЯК ПАЛ • ОЧКОВ ' + score; msgT = 99; setStatus('конец'); showDead(); }
       }
     }
     if (comboT > 0) { comboT -= dt; if (comboT <= 0) combo = 0; }
@@ -4211,9 +4256,9 @@ const Doom = (() => {
       cx.font = '700 ' + u + 'px ui-monospace,Consolas,monospace';
     }
 
-    /* миникарта */
-    const mm = Math.min(W * 0.15, H * 0.17);
-    const mcx = W - mm - W * 0.035, mcy = H - mm - H * 0.045;
+    /* миникарта — справа по центру, не мешает кнопкам */
+    const mm = Math.min(W * 0.13, H * 0.15);
+    const mcx = W - mm - W * 0.02, mcy = (H - mm) / 2;
     if (mm > 60) {
       const cell = mm / Math.max(MW, MH);
       cx.fillStyle = 'rgba(10,4,16,.72)';
@@ -4398,6 +4443,7 @@ const Doom = (() => {
 
   function startGame(m) {
     mode = m;
+    hideDead();
     hp = 100; score = 0; kills = 0; wave = 1; dead = false; runGold = 0;
     combo = 0; comboT = 0; floats = []; bolts = []; boss = null; shake = 0;
     newLevel();
@@ -4484,6 +4530,7 @@ const Doom = (() => {
     openShop(false);
     resizeCanvas();
     showPick();
+    hideDead();
     try {
       const tg = window.Telegram && window.Telegram.WebApp;
       if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
@@ -4495,13 +4542,33 @@ const Doom = (() => {
     if (ctrlBound) return;
     ctrlBound = true;
     const a = el('dauto'), m = el('dmanual');
-    if (a) a.addEventListener('click', (e) => { e.preventDefault(); startGame('auto'); });
-    if (m) m.addEventListener('click', (e) => { e.preventDefault(); startGame('manual'); });
+    if (a) a.addEventListener('click', (e) => { e.preventDefault(); hideDead(); startGame('auto'); });
+    if (m) m.addEventListener('click', (e) => { e.preventDefault(); hideDead(); startGame('manual'); });
+    const ag = el('dagain');
+    if (ag) ag.addEventListener('click', (e) => { e.preventDefault(); hideDead(); startGame(mode || 'auto'); });
+    const ex = el('dexit');
+    if (ex) ex.addEventListener('click', (e) => { e.preventDefault(); hideDead(); close(); });
   }
+
+  function showDead() {
+    const d = el('ddead');
+    if (!d) return;
+    const s = el('ddeadst');
+    if (s) s.textContent = 'ВОЛНА ' + wave + '  •  ОЧКОВ ' + score + '\nУБИТО ' + kills + '  •  ЗОЛОТА +' + Math.round(runGold);
+    d.classList.add('on');
+    const ctl = el('dctl'); if (ctl) ctl.classList.remove('on');
+    const sk = el('dsk'); if (sk) sk.classList.remove('on');
+    try {
+      const tg = window.Telegram && window.Telegram.WebApp;
+      if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
+    } catch (e) {}
+  }
+  function hideDead() { const d = el('ddead'); if (d) d.classList.remove('on'); }
 
   function close() {
     const wrap = el('dw');
     if (wrap) wrap.classList.remove('on');
+    hideDead();
     running = false;
     if (raf) { cancelAnimationFrame(raf); raf = 0; }
     mode = null;
