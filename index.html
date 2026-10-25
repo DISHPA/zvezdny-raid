@@ -3370,30 +3370,49 @@ function render() {
 function drawOffline() {
   const u = U;
   const r = offlineReport;
-  ctx.fillStyle = 'rgba(2,1,6,0.86)';
+  const pxs = pixSize();
+  ctx.fillStyle = 'rgba(4,2,10,0.88)';
   ctx.fillRect(0, 0, W, H);
-  const w = Math.min(W * 0.84, u * 340);
-  const h = u * 232;
+
+  const w = Math.min(W * 0.86, u * 330);
+  const h = u * 236;
   const x = (W - w) / 2, y = (H - h) / 2;
-  rr(x, y, w, h, u * 20, 'rgba(20,14,40,0.98)');
-  ctx.strokeStyle = hexA('#7c5cff', 0.5); ctx.lineWidth = Math.max(1.4, u * 1.6);
-  rr(x, y, w, h, u * 20, null); ctx.stroke();
 
-  txt('ПОКА ВАС НЕ БЫЛО', x + w / 2, y + u * 32, u * 15, '#e8ddff', 'center', '900');
+  /* рамка как у игрового окна */
+  arcPanel(x + pxs * 3, y + pxs * 3, w, h, '#07030e', null, u * 16);
+  arcPanel(x, y, w, h, '#140a24', '#ffd166', u * 16);
+  arcPanel(x + pxs * 2, y + pxs * 2, w - pxs * 4, h - pxs * 4, null, '#8f1f2c', u * 13);
+
+  /* заголовок-плашка */
+  const hw = w - u * 36, hh = u * 30;
+  arcPanel(x + u * 18, y + u * 12, hw, hh, '#8f1f2c', '#ffd166', pxs * 2);
+  arcTxt('ПОКА ВАС НЕ БЫЛО', x + w / 2, y + u * 12 + hh / 2, u * 14, '#fff2c0');
+
   const mins = Math.floor(r.sec / 60);
-  txt('Отсутствовали: ' + (mins >= 60 ? Math.floor(mins / 60) + ' ч ' + (mins % 60) + ' м' : mins + ' мин'),
-    x + w / 2, y + u * 58, u * 11, 'rgba(200,195,240,0.65)', 'center', '600');
+  arcTxt('ОТСУТСТВОВАЛИ: ' + (mins >= 60 ? Math.floor(mins / 60) + ' Ч ' + (mins % 60) + ' М' : mins + ' МИН'),
+    x + w / 2, y + u * 56, u * 10, '#8f7fb8');
 
-  disc(x + w / 2, y + u * 112, u * 26, 'rgba(255,209,102,0.12)');
-  disc(x + w / 2, y + u * 112, u * 17, '#ffd166');
-  txt('$', x + w / 2, y + u * 112, u * 22, 'rgba(70,40,0,0.9)', 'center', '900');
-  txt('+' + fmt(r.gold), x + w / 2, y + u * 152, u * 22, '#ffe9a8', 'center', '900');
+  /* монета — пиксельный ромб, как в HUD */
+  const cy = y + u * 112;
+  const cs = u * 15;
+  ctx.save();
+  ctx.translate(x + w / 2, cy);
+  ctx.rotate(Math.PI / 4);
+  ctx.fillStyle = '#3a2400';
+  ctx.fillRect(-cs / 2 - pxs, -cs / 2 - pxs, cs + pxs * 2, cs + pxs * 2);
+  ctx.fillStyle = '#ffd166';
+  ctx.fillRect(-cs / 2, -cs / 2, cs, cs);
+  ctx.restore();
+  arcTxt('$', x + w / 2, cy, u * 16, '#5c3d00', 'center', { shadow: 0 });
 
-  const bw = w - u * 56, bh = u * 38;
+  arcTxt('+' + fmt(r.gold), x + w / 2, y + u * 152, u * 22, '#ffe9a8');
+
+  const bw = w - u * 56, bh = u * 40;
   const bx = x + u * 28, by = y + h - bh - u * 20;
   layout.offlineBtn = { x: bx, y: by, w: bw, h: bh };
-  rr(bx, by, bw, bh, bh / 2, '#7c5cff');
-  txt('ЗАБРАТЬ', x + w / 2, by + bh / 2, u * 14, '#fff', 'center', '900');
+  arcPanel(bx + pxs * 1.5, by + pxs * 1.5, bw, bh, '#0a3018', null, u * 5);
+  arcPanel(bx, by, bw, bh, '#3ddc84', '#b6ffd0', u * 5);
+  arcTxt('ЗАБРАТЬ', x + w / 2, by + bh / 2, u * 14, '#08301a');
 }
 
 /* ============================== LOOP ============================== */
