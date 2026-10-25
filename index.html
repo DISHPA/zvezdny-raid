@@ -1144,7 +1144,10 @@ function handleDown(e){
   e.preventDefault();
   Sfx.init();
   const p = localXY(e), x = p.x, y = p.y;
-  if(shopT < 0.15 && shopBtn && x > shopBtn.x && x < shopBtn.x+shopBtn.w && y > shopBtn.y && y < shopBtn.y+shopBtn.h){
+  const sb = shopBtn;
+  const inBtn = sb && x > sb.x - U*8 && x < sb.x + sb.w + U*8 && y > sb.y - U*10 && y < sb.y + sb.h + U*10;
+  const inBand = y > H*0.86 && y < H;
+  if(shopT < 0.15 && sb && (inBtn || inBand)){
     offlineReport = null; save();
     shopOpen = true; Sfx.beep(520,0.07,'square',0.05); layoutShop(); return;
   }
