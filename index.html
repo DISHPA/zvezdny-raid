@@ -2882,9 +2882,12 @@ function drawMenu() {
     P(icx + ir * 1.2, icy - ir * 1.2, pxs, ir * 2.4, '#ff4d5e');
   }
 
-  /* DOOM — маленький аркадный автомат под кнопкой звука */
-  const db2 = u * 30;
-  const dbx = sx, dby = sy + sb + u * 8;
+  /* DOOM — аркадный автомат под кнопкой звука.
+     На телефоне u*30 даёт 33-37px — по такой кнопке палец не попадает.
+     Никогда не меньше 48 CSS-пикселей. */
+  const dbMin = 48;
+  const db2 = Math.max(u * 30, dbMin);
+  const dbx = Math.min(sx, W - pad - db2), dby = sy + sb + u * 8;
   layout.doomBtn = { x: dbx, y: dby, w: db2, h: db2 };
   arcPanel(dbx + pxs * 2, dby + pxs * 2, db2, db2, '#3a0f16', null, pxs * 2);
   arcPanel(dbx, dby, db2, db2, '#7a1622', '#ffd166', pxs * 2);
