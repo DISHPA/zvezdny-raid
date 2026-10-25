@@ -184,6 +184,8 @@ const G = {
   skin: 'base',
   skinsOwned: ['base'],
   ach: {},
+  relics: {},
+  daily: { last: 0, streak: 0 },
   auto: { buy: false },
   stats: { taps: 0, crits: 0, bosses: 0, deaths: 0, bestCombo: 0, bestDps: 0, runsStart: Date.now() }
 };
@@ -201,7 +203,8 @@ const G2 = {
   bossIntro: 0,
   dash: 0,
   hitStop: 0,
-  slowmo: 0
+  slowmo: 0,
+  ult: 0, ultFx: 0, ultFlash: 0
 };
 
 let state = 'menu';
@@ -246,8 +249,80 @@ SKILLS.strike.price = 120;
 SKILLS.tornado.price = 480;
 SKILLS.meteor.price = 1400;
 SKILLS.heal.price = 320;
-const skCd = { strike: 0, tornado: 0, meteor: 0, heal: 0 };
+const skCd = { strike: 0, tornado: 0, meteor: 0, heal: 0, ult: 0 };
 const SKORDER = ['strike', 'tornado', 'meteor', 'heal'];
+
+/* ============================== FLAVOUR ============================== */
+const FLAV = {
+  taunt: [
+    'КОСМИЧЕСКАЯ ПЫЛЬ НЕ ПОМИЛУЕТ СЛАБЫХ',
+    'ТВОЙ КОРАБЛЬ НА ПОРОГЕ РАСПАДА',
+    'СТАНЬ ЧАСТЬЮ ЗВЁЗДНОЙ ПЫЛИ',
+    'ТИШИНА ЗДЕСЬ ЗВЕНИТ УГРОЗОЙ',
+    'ГОРИЗОНТ ДЫШИТ ТЬМОЙ'
+  ],
+  zone: [
+    'ГОРИЗОНТ ДЫШИТ ТЬМОЙ',
+    'ТИШИНА ЗВЕНИТ В КАЖДОМ СЛОВЕ',
+    'МИР В ЗЕРКАЛЕ КОСМИЧЕСКОЙ ПЫЛИ'
+  ],
+  level: [
+    'СИЛА РАСТЁТ!',
+    'КРИТИЧЕСКИЕ УДАРЫ СТАЛИ ЧАЩЕ',
+    'МАГИЯ ГЕРОЯ ОСЛЕПИТЕЛЬНА'
+  ]
+};
+
+/* ============================== RELICS ============================== */
+const RELICS = [
+  { id: 'grav', name: 'СЛОМАННЫЙ ЧАСОВОЙ ГРАВИТОНА', d: '+18% урона в секунду', cost: 3, icon: 'dmg',  col: '#8ab4ff', eff: { dps: 0.18 } },
+  { id: 'anchor', name: 'ЗВЁЗДНЫЙ ЯКОРЬ ТИШИНЫ',      d: '+25% к добыче золота', cost: 4, icon: 'gold', col: '#ffd166', eff: { gold: 0.25 } },
+  { id: 'matter', name: 'ОСКОЛОК МАТЕРИИ ВЕЧНОСТИ',   d: '+30% к запасу HP',     cost: 4, icon: 'hp',   col: '#3ddc84', eff: { hp: 0.30 } },
+  { id: 'star', name: 'КРИСТАЛЛ ЗАБЫТОЙ ЗВЕЗДЫ',      d: '+8% шанса крита',      cost: 5, icon: 'crit', col: '#7cf3ff', eff: { crit: 0.08 } },
+  { id: 'bolt', name: 'МЕТЕОРИТ-МОЛНИЯ',              d: '+40% мощи отряда',     cost: 5, icon: 'a1',   col: '#ff9040', eff: { ally: 0.40 } },
+  { id: 'sun',   name: 'ТЕНЬ ПЕРВОГО СОЛНЦА',         d: '+15% ко всему',        cost: 8, icon: 'soul', col: '#c77dff', eff: { all: 0.15 } }
+];
+const relicOwned = (id) => !!G.relics[id];
+const relicBonus = (k) => {
+  let v = 0, all = 0;
+  for (const r of RELICS) {
+    if (!G.relics[r.id]) continue;
+    if (r.eff.all) all += r.eff.all;
+    if (r.eff[k]) v += r.eff[k];
+  }
+  return v + all;
+};
+
+/* ============================== DAILY / ULT ============================== */
+const DAILY = [
+  { name: 'ИСКРЕННИЙ СВЕТ',    what: 'золото', gold: 400 },
+  { name: 'БЕЗУПРЕЧНАЯ ОРБИТА', what: 'множитель золота x2 на 10 мин', gold: 900 },
+  { name: 'СИЯЮЩАЯ ГАВАНЬ',     what: 'кристалл', gems: 1 },
+  { name: 'ЗВЁЗДНОЕ ПОСЛАНИЕ',  what: 'золото', gold: 2600 },
+  { name: 'ЯСНОСТЬ ПУТИ',       what: 'множитель урона x2 на 10 мин', gold: 3200 },
+  { name: 'ВОЗДУХ НА МАРСЕ',    what: 'кристаллы', gems: 2 },
+  { name: 'КОСМИЧЕСКАЯ ЗАРНИЦА', what: 'кристаллы + золото', gems: 3, gold: 6000 }
+];
+const DAY = 86400000;
+const ULT = {
+  id: 'ult', cd: 45, zoneReq: 6, cost: 12,
+  name: 'КОСМИЧЕСКИЙ РАЗРЫВ РЕАЛЬНОСТИ',
+  col: '#ff6ad5', dmgMul: 90
+};
+
+function dailyReady() { return (Date.now() - (G.daily.last || 0)) >= DAY * 0.92; }
+function dailyIdx() { return Math.min(6, (G.daily.streak || 0) % 7); }
+function claimDaily() {
+  if (!dailyReady()) return null;
+  const d = DAILY[dailyIdx()];
+  if (d.gold) { const g = d.gold + G.zone * 120; G.gold += g; G.totalGold += g; }
+  if (d.gems) G.gems += d.gems;
+  G.daily.last = Date.now();
+  G.daily.streak = (G.daily.streak || 0) + 1;
+  Sfx.win(); HAP('win');
+  save();
+  return d;
+}
 
 function cost(key) {
   const d = UP[key];
@@ -262,19 +337,25 @@ function stats() {
   const soulM = 1 + G.souls * 0.12 + achCount() * 0.02;
   const skinB = G.skin !== 'base' ? 1.06 : 1;
 
-  const dmg = (1 + u.dmg * 2.6) * soulM * skinB;
+  let dmg = (1 + u.dmg * 2.6) * soulM * skinB;
   const aps = 0.85 * (1 + u.spd * 0.055);
-  const crit = Math.min(0.80, u.crit * 0.014);
+  let crit = Math.min(0.80, u.crit * 0.014);
   const cdmg = 2.0 + u.cdmg * 0.28;
-  const tapM = 1 + u.tap * 0.42;
-  const goldM = (1 + u.gold * 0.13) * soulM;
-  const maxHP = (60 + u.hp * 32) * (1 + G.souls * 0.06);
+  const tapM = (1 + u.tap * 0.42) * (1 + relicBonus('tap'));
+  let goldM = (1 + u.gold * 0.13) * soulM;
+  let maxHP = (60 + u.hp * 32) * (1 + G.souls * 0.06);
   const regen = u.regen * 0.9 + maxHP * 0.001;
   const armor = Math.min(0.75, u.armor * 0.022);
-  const ally = u.a1 * 1.8 + u.a2 * 9 + u.a3 * 62;
+  let ally = u.a1 * 1.8 + u.a2 * 9 + u.a3 * 62;
+
+  crit = Math.min(0.90, crit + relicBonus('crit'));
+  goldM *= 1 + relicBonus('gold');
+  maxHP *= 1 + relicBonus('hp');
+  ally *= 1 + relicBonus('ally');
 
   const hit = dmg * (1 + crit * (cdmg - 1));
-  const dps = hit * aps + ally;
+  let dps = hit * aps + ally;
+  dps *= 1 + relicBonus('dps');
 
   return { dmg, aps, crit, cdmg, tapM, goldM, maxHP, regen, armor, ally, hit, dps, soulM };
 }
@@ -301,6 +382,7 @@ function save() {
       kills: G.kills, totalGold: G.totalGold, best: G.best, prestiges: G.prestiges,
       playTime: G.playTime, lastSeen: G.lastSeen, sound: G.sound, music: G.music,
       up: G.up, sk: G.sk, skin: G.skin, skinsOwned: G.skinsOwned, ach: G.ach,
+      relics: G.relics, daily: G.daily,
       auto: G.auto, stats: G.stats
     };
     localStorage.setItem(KEY, JSON.stringify(d));
@@ -320,6 +402,8 @@ function load() {
     if (typeof d.skin === 'string') G.skin = d.skin;
     if (Array.isArray(d.skinsOwned) && d.skinsOwned.length) G.skinsOwned = d.skinsOwned;
     if (d.ach && typeof d.ach === 'object') G.ach = d.ach;
+    if (d.relics && typeof d.relics === 'object') G.relics = d.relics;
+    if (d.daily && typeof d.daily === 'object') G.daily = d.daily;
     if (d.auto) G.auto = d.auto;
     if (d.stats) Object.assign(G.stats, d.stats);
     if (typeof d.sound === 'boolean') G.sound = d.sound;
@@ -375,8 +459,16 @@ function drawSky(zoneT) {
     ctx.fillStyle = s.c;
     const sz = s.r;
     ctx.fillRect(s.x * W, s.y * H * 0.75, sz, sz);
+    /* bright stars get a soft halo */
+    if (s.r > 1.5) {
+      ctx.globalAlpha = s.a * tw * 0.16;
+      disc(s.x * W, s.y * H * 0.75 + sz * 0.5, U * 9, s.c);
+    }
   }
   ctx.globalAlpha = 1;
+
+  drawPlanet(a, b, t, now);
+  drawAurora(a, b, t, now);
 
   /* shooting stars */
   for (const m of meteors) {
@@ -391,6 +483,103 @@ function drawSky(zoneT) {
     ctx.beginPath(); ctx.moveTo(m.x, m.y); ctx.lineTo(m.x - m.vx * 14, m.y - m.vy * 14); ctx.stroke();
     ctx.globalAlpha = 1;
   }
+}
+
+/* ============================== PLANET & AURORA ============================== */
+function drawPlanet(a, b, t, now) {
+  /* a distant ringed planet, slowly drifting */
+  const px = W * 0.80 + Math.sin(now * 0.05) * U * 8;
+  const py = H * 0.155 + Math.cos(now * 0.04) * U * 5;
+  const pr = U * 62;
+  const pc = mixHex(a.accent, b.accent, t);
+
+  ctx.save();
+  /* glow */
+  const pg = ctx.createRadialGradient(px, py, pr * 0.4, px, py, pr * 2.4);
+  pg.addColorStop(0, hexA(pc, 0.20));
+  pg.addColorStop(0.55, hexA(pc, 0.06));
+  pg.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = pg;
+  ctx.fillRect(px - pr * 3, py - pr * 3, pr * 6, pr * 6);
+
+  /* body with terminator */
+  const bg = ctx.createRadialGradient(px - pr * 0.38, py - pr * 0.42, pr * 0.1, px, py, pr);
+  bg.addColorStop(0, hexA(pc, 0.62));
+  bg.addColorStop(0.62, hexA(mixHex(pc, '#0a0718', 0.55), 0.72));
+  bg.addColorStop(1, hexA('#070412', 0.92));
+  ctx.beginPath(); ctx.arc(px, py, pr, 0, TAU); ctx.fillStyle = bg; ctx.fill();
+
+  /* bands */
+  ctx.save();
+  ctx.beginPath(); ctx.arc(px, py, pr, 0, TAU); ctx.clip();
+  for (let i = -3; i <= 3; i++) {
+    const yy = py + i * pr * 0.24;
+    ctx.globalAlpha = 0.10 + (i % 2 ? 0.05 : 0.02);
+    ctx.fillStyle = i % 2 ? '#ffffff' : '#000000';
+    ctx.fillRect(px - pr, yy, pr * 2, pr * 0.11);
+  }
+  ctx.restore();
+
+  /* ring behind */
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(-0.36);
+  ctx.strokeStyle = hexA(pc, 0.40);
+  ctx.lineWidth = Math.max(1.4, U * 3.4);
+  ctx.beginPath(); ctx.ellipse(0, 0, pr * 1.75, pr * 0.52, 0, Math.PI, TAU); ctx.stroke();
+  ctx.strokeStyle = hexA(pc, 0.16);
+  ctx.lineWidth = Math.max(1, U * 7);
+  ctx.beginPath(); ctx.ellipse(0, 0, pr * 1.9, pr * 0.58, 0, Math.PI, TAU); ctx.stroke();
+  ctx.restore();
+
+  /* ring front */
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(-0.36);
+  ctx.strokeStyle = hexA(pc, 0.55);
+  ctx.lineWidth = Math.max(1.4, U * 3.4);
+  ctx.beginPath(); ctx.ellipse(0, 0, pr * 1.75, pr * 0.52, 0, 0, Math.PI); ctx.stroke();
+  ctx.restore();
+
+  /* rim light */
+  ctx.strokeStyle = hexA(pc, 0.5);
+  ctx.lineWidth = Math.max(1, U * 1.4);
+  ctx.beginPath(); ctx.arc(px, py, pr - U * 0.7, 0, TAU); ctx.stroke();
+  ctx.restore();
+}
+
+function drawAurora(a, b, t, now) {
+  const ac = mixHex(a.accent, b.accent, t);
+  const ac2 = mixHex(a.sky[4], b.sky[4], t);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let band = 0; band < 2; band++) {
+    const yBase = H * (0.18 + band * 0.13);
+    const amp = U * (26 + band * 14);
+    const spd = 0.16 + band * 0.09;
+    ctx.beginPath();
+    ctx.moveTo(-U * 20, yBase);
+    for (let x = -U * 20; x <= W + U * 20; x += U * 18) {
+      const y = yBase
+        + Math.sin(x * 0.0038 + now * spd + band * 2.1) * amp
+        + Math.sin(x * 0.011 - now * spd * 1.7) * amp * 0.34;
+      ctx.lineTo(x, y);
+    }
+    for (let x = W + U * 20; x >= -U * 20; x -= U * 18) {
+      const y = yBase + amp * 1.9
+        + Math.sin(x * 0.0038 + now * spd + band * 2.1) * amp * 0.5;
+      ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    const g = ctx.createLinearGradient(0, yBase - amp, 0, yBase + amp * 2);
+    g.addColorStop(0, hexA(ac, 0));
+    g.addColorStop(0.35, hexA(ac, 0.10 + band * 0.02));
+    g.addColorStop(0.7, hexA(ac2, 0.07));
+    g.addColorStop(1, hexA(ac2, 0));
+    ctx.fillStyle = g;
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 const meteors = [];
@@ -1155,7 +1344,11 @@ const ACH = [
   { id: 'c50',    need: () => G.stats.bestCombo >= 50, name: 'КОМБО 50',    d: 'Комбо из 50 ударов' },
   { id: 'g1m',    need: () => G.totalGold >= 1e6,   name: 'МИЛЛИОНЕР',      d: 'Накопить 1М золота' },
   { id: 'sk4',    need: () => (G.sk.strike + G.sk.tornado + G.sk.meteor + G.sk.heal) >= 4, name: 'МАСТЕР', d: 'Изучить все умения' },
-  { id: 'skn3',   need: () => G.skinsOwned.length >= 3, name: 'МОДНИК',     d: 'Открыть 3 скина' }
+  { id: 'skn3',   need: () => G.skinsOwned.length >= 3, name: 'МОДНИК',     d: 'Открыть 3 скина' },
+  { id: 'rel1',   need: () => Object.keys(G.relics || {}).length >= 1, name: 'КОЛЛЕКЦИОНЕР', d: 'Найти первую реликвию' },
+  { id: 'rel6',   need: () => Object.keys(G.relics || {}).length >= 6, name: 'ХРАНИТЕЛЬ',    d: 'Собрать все реликвии' },
+  { id: 'd3',     need: () => (G.daily.streak || 0) >= 3, name: 'ВЕРНЫЙ',   d: '3 дня подряд в игре' },
+  { id: 'd7',     need: () => (G.daily.streak || 0) >= 7, name: 'НЕДЕЛЯ',   d: '7 дней подряд в игре' }
 ];
 
 function checkAch() {
@@ -1173,6 +1366,49 @@ function checkAch() {
   }
 }
 
+/* ============================== ULTIMATE ============================== */
+function useUlt() {
+  if (state !== 'play' || paused) return;
+  if (skCd.ult > 0) { Sfx.bad(); return; }
+  if (G.zone < ULT.zoneReq) { showMsg('НУЖНА ЗОНА ' + ULT.zoneReq); Sfx.bad(); return; }
+  if (G.gems < ULT.cost) { showMsg('НУЖНО ' + ULT.cost + ' ◆'); Sfx.bad(); HAP('bad'); return; }
+  G.gems -= ULT.cost;
+  skCd.ult = ULT.cd;
+  G2.ultFx = 1;
+  G2.ultFlash = 1;
+  G2.shake = U * 16;
+  Sfx.skill(); HAP('crit');
+
+  const st = stats();
+  const dmg = st.dmg * ULT.dmgMul * (1 + G.zone * 0.06);
+  addSkillFx('meteor', G2.monster ? G2.monster.x : W * 0.72, groundY, ULT.col);
+  shockRing(heroX, groundY - U * 46, ULT.col, U * 320);
+  shockRing(heroX, groundY - U * 46, '#ffffff', U * 190);
+  for (let i = 0; i < 30; i++) {
+    puff(heroX + rand(-U * 90, U * 90), groundY - rand(0, U * 160), 1, i % 2 ? ULT.col : '#ffffff', 260, 0.8);
+  }
+  if (G2.monster) damageMonster(dmg, false, true);
+  save();
+  return true;
+}
+
+/* ============================== RELIC SHOP ============================== */
+function buyRelic(id) {
+  const r = RELICS.find(x => x.id === id);
+  if (!r) return false;
+  if (G.relics[id]) { showMsg('УЖЕ ОТКРЫТО'); Sfx.bad(); return false; }
+  if (G.zone < 4) { showMsg('НУЖНА ЗОНА 4'); Sfx.bad(); return false; }
+  if (G.gems < r.cost) { showMsg('НУЖНО ' + r.cost + ' ◆'); Sfx.bad(); HAP('bad'); return false; }
+  G.gems -= r.cost;
+  G.relics[id] = 1;
+  const st = stats();
+  G2.maxHP = st.maxHP;
+  Sfx.win(); HAP('win');
+  showMsg('РЕЛИКВИЯ ОТКРЫТА');
+  checkAch(); save();
+  return true;
+}
+
 /* ============================== SHOP LOGIC ============================== */
 function showMsg(s, t) { shopMsg = s; shopMsgT = t || 1.6; }
 
@@ -1183,6 +1419,7 @@ function buy(key) {
   G.up[key]++;
   Sfx.buy(); HAP('buy');
   showMsg(UP[key].name + ' УР.' + (G.up[key] + 1));
+  if (G.up[key] % 10 === 0) floatTxt(FLAV.level[(G.up[key] / 10 | 0) % FLAV.level.length], heroX, groundY - U * 150, '#9dffc4', U * 15);
   if (key === 'hp') { const st = stats(); G2.maxHP = st.maxHP; G2.hp = Math.min(G2.maxHP, G2.hp + 32); }
   save();
   return true;
@@ -1251,6 +1488,8 @@ function update(dt) {
   if (G2.dead > 0) G2.dead = Math.max(0, G2.dead - dt * 0.9);
   if (G2.zoneIn > 0) G2.zoneIn = Math.max(0, G2.zoneIn - dt * 1.4);
   if (G2.bossIntro > 0) G2.bossIntro = Math.max(0, G2.bossIntro - dt * 0.7);
+  if (G2.ultFx > 0) G2.ultFx = Math.max(0, G2.ultFx - dt * 0.85);
+  if (G2.ultFlash > 0) G2.ultFlash = Math.max(0, G2.ultFlash - dt * 2.4);
   if (G2.monster) {
     if (G2.monster.flash > 0) G2.monster.flash = Math.max(0, G2.monster.flash - dt * 4);
     if (G2.monster.hurtT > 0) G2.monster.hurtT = Math.max(0, G2.monster.hurtT - dt);
@@ -1601,6 +1840,7 @@ function drawHUD() {
       txt(String(lv), b.x + b.r * 0.62, b.y - b.r * 0.62, u * 9, '#ffd166', 'center', '900');
     }
   }
+  drawUltBtn();
 }
 
 function layoutSkillBtns(bw, bh, by) {
@@ -1613,6 +1853,78 @@ function layoutSkillBtns(bw, bh, by) {
   layout.skillBtns = [];
   for (let i = 0; i < 4; i++) {
     layout.skillBtns.push({ x: startX - i * gap, y, r });
+  }
+  /* ultimate button — bigger, floating above the row */
+  const ur = r * 1.42;
+  layout.ultBtn = { x: startX, y: y - ur - r * 1.25, r: ur };
+}
+
+function drawUltBtn() {
+  const u = U;
+  const b = layout.ultBtn;
+  if (!b) return;
+  const t = performance.now() / 1000;
+  const cd = skCd.ult;
+  const ready = cd <= 0 && G.zone >= ULT.zoneReq && G.gems >= ULT.cost;
+  const locked = G.zone < ULT.zoneReq;
+
+  /* rotating halo */
+  if (ready) {
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    ctx.rotate(t * 1.1);
+    ctx.strokeStyle = hexA(ULT.col, 0.6);
+    ctx.lineWidth = Math.max(1.4, u * 2.2);
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.arc(0, 0, b.r + u * 5, i * TAU / 3, i * TAU / 3 + 0.7);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  disc(b.x, b.y, b.r, locked ? 'rgba(20,16,34,0.78)' : 'rgba(14,6,30,0.88)');
+  const g = ctx.createRadialGradient(b.x, b.y - b.r * 0.35, b.r * 0.15, b.x, b.y, b.r);
+  g.addColorStop(0, hexA(ULT.col, ready ? 0.55 : 0.20));
+  g.addColorStop(1, hexA('#12081f', 0.9));
+  ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, TAU); ctx.fillStyle = g; ctx.fill();
+
+  ctx.strokeStyle = ready ? hexA(ULT.col, 0.95) : 'rgba(255,255,255,0.18)';
+  ctx.lineWidth = ready ? Math.max(2, u * 2.6) : 1.4;
+  ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, TAU); ctx.stroke();
+  if (ready) {
+    ctx.save(); ctx.shadowColor = ULT.col; ctx.shadowBlur = u * 20;
+    ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, TAU); ctx.stroke();
+    ctx.restore();
+  }
+
+  /* star glyph */
+  ctx.save();
+  ctx.translate(b.x, b.y - b.r * 0.05);
+  ctx.globalAlpha = locked ? 0.4 : 1;
+  ctx.fillStyle = ready ? '#fff' : hexA(ULT.col, 0.75);
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const rr2 = i % 2 ? b.r * 0.26 : b.r * 0.56;
+    const ang = -Math.PI / 2 + i * Math.PI / 5;
+    const px = Math.cos(ang) * rr2, py = Math.sin(ang) * rr2;
+    i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+  }
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+
+  if (cd > 0) {
+    const frac = cd / ULT.cd;
+    ctx.beginPath();
+    ctx.moveTo(b.x, b.y);
+    ctx.arc(b.x, b.y, b.r, -Math.PI / 2, -Math.PI / 2 + TAU * frac);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(0,0,0,0.66)'; ctx.fill();
+    txt(Math.ceil(cd), b.x, b.y, u * 15, '#fff', 'center', '900');
+  } else if (locked) {
+    txt('Z' + ULT.zoneReq, b.x, b.y, u * 12, 'rgba(255,255,255,0.6)', 'center', '900');
+  } else {
+    txt(String(ULT.cost) + '◆', b.x, b.y + b.r * 0.66, u * 10, '#ffb3f0', 'center', '900');
   }
 }
 
@@ -1653,6 +1965,7 @@ const TABS = [
   { id: 'def', name: 'ЗАЩИТА', keys: ['hp','regen','armor'] },
   { id: 'sq',  name: 'ОТРЯД', keys: ['a1','a2','a3'] },
   { id: 'sk',  name: 'УМЕНИЯ', keys: [] },
+  { id: 'rel', name: 'РЕЛИКВИИ', keys: [] },
   { id: 'pr',  name: 'ПРОЧЕЕ', keys: [] }
 ];
 
@@ -1672,7 +1985,7 @@ function layoutShop() {
   /* tabs */
   const tabH = u * 28;
   const tabY = sy + u * 46;
-  const tabW = (sw - u * 20) / 5;
+  const tabW = (sw - u * 20) / TABS.length;
   layout.tabs = TABS.map((t, i) => ({
     id: t.id, x: sx + u * 10 + i * tabW, y: tabY, w: tabW, h: tabH
   }));
@@ -1686,12 +1999,12 @@ function layoutShop() {
   layout.skillCards = [];
   if (tab === 'sk') {
     const n = SKORDER.length;
-    const cardH = Math.min(u * 74, (layout.content.h - (n - 1) * u * 9) / n);
+    const cardH = Math.min(u * 96, (layout.content.h - (n - 1) * u * 10) / n);
     SKORDER.forEach((id, i) => {
       layout.skillCards.push({
         id,
         x: layout.content.x,
-        y: layout.content.y + i * (cardH + u * 9),
+        y: layout.content.y + i * (cardH + u * 10),
         w: layout.content.w, h: cardH
       });
     });
@@ -1702,16 +2015,34 @@ function layoutShop() {
   const keys = t ? t.keys : [];
   layout.cards = [];
   if (keys.length) {
-    const cardH = Math.min(u * 84, (layout.content.h - (keys.length - 1) * u * 8) / keys.length);
+    const cardH = Math.min(u * 112, (layout.content.h - (keys.length - 1) * u * 10) / keys.length);
     keys.forEach((k, i) => {
       layout.cards.push({
         key: k,
         x: layout.content.x,
-        y: layout.content.y + i * (cardH + u * 8),
+        y: layout.content.y + i * (cardH + u * 10),
         w: layout.content.w,
         h: cardH
       });
     });
+  }
+
+  /* relics tab layout */
+  layout.relicCards = [];
+  if (tab === 'rel') {
+    const gap = u * 8;
+    const cw = (layout.content.w - gap) / 2;
+    const chh = u * 58;
+    RELICS.forEach((r, i) => {
+      const row = Math.floor(i / 2), col = i % 2;
+      layout.relicCards.push({
+        id: r.id,
+        x: layout.content.x + col * (cw + gap),
+        y: layout.content.y + u * 74 + row * (chh + gap),
+        w: cw, h: chh
+      });
+    });
+    layout.dailyBtn = { x: layout.content.x, y: layout.content.y, w: layout.content.w, h: u * 62 };
   }
 
   /* prestige / other buttons in "pr" tab */
@@ -1770,7 +2101,8 @@ function drawShop() {
   ctx.fillRect(L.x + u * 20, L.y + u * 2, L.w - u * 40, Math.max(1, u * 2));
 
   /* title */
-  txt('УЛУЧШЕНИЯ', L.x + u * 22, L.y + u * 26, u * 17, '#e8ddff', 'left', '900');
+  const TITLES = { atk: 'АТАКА', def: 'ЗАЩИТА', sq: 'ОТРЯД', sk: 'УМЕНИЯ', rel: 'РЕЛИКВИИ', pr: 'ПРОЧЕЕ' };
+  txt(TITLES[tab] || 'УЛУЧШЕНИЯ', L.x + u * 22, L.y + u * 26, u * 17, '#e8ddff', 'left', '900');
   txt('ЗОЛОТО: ' + fmt(G.gold), L.x + u * 22, L.y + u * 45, u * 11, hexA('#ffd166', 0.8), 'left', '700');
 
   /* close */
@@ -1799,6 +2131,7 @@ function drawShop() {
   /* content */
   if (tab === 'pr') drawPrestigeTab();
   else if (tab === 'sk') drawSkillCards();
+  else if (tab === 'rel') drawRelicsTab();
   else drawUpgradeCards();
 
   /* shop message toast */
@@ -1812,6 +2145,118 @@ function drawShop() {
   }
 
   ctx.restore();
+}
+
+function drawRelicsTab() {
+  const u = U;
+  const C = layout.content;
+  const now = performance.now() / 1000;
+
+  /* ---- daily reward ---- */
+  const db = layout.dailyBtn;
+  if (db) {
+    const ready = dailyReady();
+    const d = DAILY[dailyIdx()];
+    const g = ctx.createLinearGradient(db.x, db.y, db.x + db.w, db.y + db.h);
+    g.addColorStop(0, ready ? 'rgba(255,209,102,0.20)' : 'rgba(255,255,255,0.045)');
+    g.addColorStop(1, ready ? 'rgba(255,140,60,0.10)' : 'rgba(255,255,255,0.03)');
+    rr(db.x, db.y, db.w, db.h, u * 14, null);
+    ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = ready ? hexA('#ffd166', 0.65) : 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = ready ? Math.max(1.4, u * 1.8) : 1;
+    rr(db.x, db.y, db.w, db.h, u * 14, null); ctx.stroke();
+
+    if (ready) {
+      const pulse = 0.5 + 0.5 * Math.sin(now * 3.2);
+      ctx.save(); ctx.shadowColor = '#ffd166'; ctx.shadowBlur = u * 16 * pulse;
+      rr(db.x, db.y, db.w, db.h, u * 14, null); ctx.stroke();
+      ctx.restore();
+    }
+
+    /* gift glyph */
+    const gx = db.x + u * 30, gy = db.y + db.h / 2;
+    rr(gx - u * 12, gy - u * 8, u * 24, u * 18, u * 3, ready ? '#ffd166' : 'rgba(255,255,255,0.20)');
+    ctx.fillStyle = ready ? 'rgba(120,70,0,0.85)' : 'rgba(0,0,0,0.35)';
+    ctx.fillRect(gx - u * 12, gy - u * 1.5, u * 24, u * 3);
+    ctx.fillRect(gx - u * 1.6, gy - u * 8, u * 3.2, u * 18);
+
+    txt('ЕЖЕДНЕВНАЯ НАГРАДА', db.x + u * 54, db.y + db.h * 0.34, u * 11.5,
+      ready ? '#ffe9a8' : 'rgba(255,255,255,0.42)', 'left', '900');
+    txt('День ' + ((G.daily.streak || 0) % 7 + 1) + '/7 • ' + d.name + ' — ' + (d.what || ''),
+      db.x + u * 54, db.y + db.h * 0.68, u * 9, ready ? hexA('#ffd166', 0.75) : 'rgba(255,255,255,0.32)', 'left', '600', db.w - u * 150);
+
+    const bw = u * 86, bh = u * 28;
+    const bx = db.x + db.w - bw - u * 12, byy = db.y + db.h / 2 - bh / 2;
+    rr(bx, byy, bw, bh, bh / 2, ready ? 'rgba(255,209,102,0.95)' : 'rgba(255,255,255,0.06)');
+    txt(ready ? 'ЗАБРАТЬ' : 'ЖДЁМ', bx + bw / 2, byy + bh / 2, u * 10,
+      ready ? '#3a2400' : 'rgba(255,255,255,0.30)', 'center', '900');
+    layout.dailyClaim = { x: bx, y: byy, w: bw, h: bh };
+  }
+
+  txt('РЕЛИКВИИ', C.x, C.y + u * 68, u * 12, '#e8ddff', 'left', '900');
+  txt('◆ ' + G.gems, C.x + C.w, C.y + u * 68, u * 12, '#7cf3ff', 'right', '900');
+  ctx.textAlign = 'left';
+
+  for (const card of layout.relicCards) {
+    const r = RELICS.find(x => x.id === card.id);
+    const owned = relicOwned(r.id);
+    const affordable = !owned && G.gems >= r.cost && G.zone >= 4;
+
+    rr(card.x, card.y, card.w, card.h, u * 12,
+      owned ? hexA(r.col, 0.16) : 'rgba(255,255,255,0.045)');
+    ctx.strokeStyle = owned ? hexA(r.col, 0.75) : affordable ? hexA('#3ddc84', 0.45) : 'rgba(255,255,255,0.10)';
+    ctx.lineWidth = owned ? Math.max(1.6, u * 1.8) : 1;
+    rr(card.x, card.y, card.w, card.h, u * 12, null); ctx.stroke();
+
+    if (owned) {
+      ctx.save(); ctx.shadowColor = r.col; ctx.shadowBlur = u * 10;
+      rr(card.x, card.y, card.w, card.h, u * 12, null); ctx.stroke();
+      ctx.restore();
+    }
+
+    statIcon(r.icon, card.x + u * 24, card.y + card.h / 2, u * 13, owned ? r.col : hexA(r.col, 0.45));
+
+    const nm = owned ? r.name : r.name;
+    txt(nm, card.x + u * 46, card.y + card.h * 0.32, u * 8.5,
+      owned ? '#fff' : 'rgba(255,255,255,0.62)', 'left', '800', card.w - u * 100);
+    txt(r.d, card.x + u * 46, card.y + card.h * 0.58, u * 8,
+      owned ? hexA(r.col, 0.85) : 'rgba(255,255,255,0.36)', 'left', '600', card.w - u * 100);
+
+    const tag = owned ? 'ЕСТЬ' : r.cost + ' ◆';
+    txt(tag, card.x + card.w - u * 12, card.y + card.h - u * 12, u * 9,
+      owned ? hexA('#3ddc84', 0.9) : affordable ? '#9dffc4' : 'rgba(255,255,255,0.34)', 'right', '900');
+  }
+
+  /* ---- stats summary panel ---- */
+  const sy = C.y + u * 74 + 3 * (u * 58 + u * 8) + u * 12;
+  const shh = Math.min(u * 132, C.y + C.h - sy - u * 6);
+  if (shh > u * 50) {
+    const own = Object.keys(G.relics || {}).length;
+    rr(C.x, sy, C.w, shh, u * 12, 'rgba(255,255,255,0.035)');
+    ctx.strokeStyle = 'rgba(255,255,255,0.09)';
+    ctx.lineWidth = 1;
+    rr(C.x, sy, C.w, shh, u * 12, null); ctx.stroke();
+
+    txt('БОНУСЫ РЕЛИКВИЙ', C.x + u * 16, sy + u * 20, u * 10, 'rgba(255,255,255,0.5)', 'left', '800');
+    txt(own + ' / 6', C.x + C.w - u * 16, sy + u * 20, u * 10,
+      own >= 6 ? '#3ddc84' : '#7cf3ff', 'right', '900');
+
+    const rows = [
+      ['УРОН В СЕК', '+' + Math.round(relicBonus('dps') * 100) + '%'],
+      ['ЗОЛОТО',     '+' + Math.round(relicBonus('gold') * 100) + '%'],
+      ['HP',         '+' + Math.round(relicBonus('hp') * 100) + '%'],
+      ['КРИТ',       '+' + Math.round(relicBonus('crit') * 100) + '%'],
+      ['ОТРЯД',      '+' + Math.round(relicBonus('ally') * 100) + '%'],
+      ['ВСЁ',        '+' + Math.round(relicBonus('all') * 100) + '%']
+    ];
+    const colW = C.w / 3;
+    rows.forEach((r, i) => {
+      const cx2 = C.x + (i % 3) * colW + u * 16;
+      const cy2 = sy + u * 46 + Math.floor(i / 3) * u * 34;
+      txt(r[0], cx2, cy2, u * 8.5, 'rgba(255,255,255,0.38)', 'left', '700');
+      txt(r[1], cx2, cy2 + u * 16, u * 12, r[1] === '+0%' ? 'rgba(255,255,255,0.28)' : '#9dffc4', 'left', '900');
+    });
+  }
 }
 
 function drawUpgradeCards() {
@@ -1888,8 +2333,13 @@ function drawSkillCards() {
   };
   const cdesc = (id) => {
     const s = CONTENT.skills && CONTENT.skills[id];
-    if (Array.isArray(s) && s[1]) return s[1];
-    return '';
+    if (Array.isArray(s) && s[1] && s[1].length > 4) return s[1];
+    return {
+      strike: 'Мгновенный удар по цели ×3',
+      tornado: 'Виражи урона по всем врагам',
+      meteor: 'Обрушивает небо на противника',
+      heal: 'Восстанавливает запас прочности'
+    }[id] || '';
   };
 
   for (const c of layout.skillCards) {
@@ -1914,12 +2364,12 @@ function drawSkillCards() {
     ctx.globalAlpha = 1;
 
     const nx = c.x + u * 58;
-    txt(cname(id), nx, c.y + c.h * 0.30, u * 12.5, locked ? 'rgba(255,255,255,0.35)' : '#eae2ff', 'left', '800', c.w - u * 148);
+    txt(cname(id), nx, c.y + c.h * 0.34, u * 13, locked ? 'rgba(255,255,255,0.35)' : '#eae2ff', 'left', '800', c.w - u * 148);
     const sub = locked ? ('ОТКРОЕТСЯ В ЗОНЕ ' + def.zoneReq)
       : ('УРОВЕНЬ ' + lv + '/5' + (lv > 0 ? '   •   УРОН ×' + (def.dmgMul * (1 + lv * 0.5)).toFixed(1) : ''));
-    txt(sub, nx, c.y + c.h * 0.56, u * 9.5, locked ? 'rgba(255,255,255,0.28)' : 'rgba(200,190,240,0.6)', 'left', '700', c.w - u * 148);
+    txt(sub, nx, c.y + c.h * 0.58, u * 10, locked ? 'rgba(255,255,255,0.28)' : 'rgba(200,190,240,0.62)', 'left', '700', c.w - u * 148);
     const d = cdesc(id);
-    if (d) txt(d, nx, c.y + c.h * 0.79, u * 8.5, hexA(def.col, 0.6), 'left', '600', c.w - u * 148);
+    if (d) txt(d, nx, c.y + c.h * 0.80, u * 9, hexA(def.col, 0.68), 'left', '600', c.w - u * 148);
 
     const bwd = u * 74, bht = Math.min(u * 30, c.h * 0.42);
     const bxx = c.x + c.w - bwd - u * 10;
@@ -2000,6 +2450,36 @@ function drawPrestigeTab() {
       ctx.fillStyle = 'rgba(0,0,0,0.42)';
       rr(sc.x, sc.y, sc.w, sc.h, u * 12, 'rgba(0,0,0,0.42)');
     }
+  }
+
+  /* lifetime stats */
+  const lastSkin = layout.skinCards[layout.skinCards.length - 1];
+  const sy = (lastSkin ? lastSkin.y + lastSkin.h : C.y + u * 396) + u * 14;
+  const shh = C.y + C.h - sy - u * 4;
+  if (shh > u * 62) {
+    rr(C.x, sy, C.w, Math.min(shh, u * 88), u * 14, 'rgba(255,255,255,0.035)');
+    ctx.strokeStyle = 'rgba(255,255,255,0.09)'; ctx.lineWidth = 1;
+    rr(C.x, sy, C.w, Math.min(shh, u * 88), u * 14, null); ctx.stroke();
+    txt('СТАТИСТИКА', C.x + u * 16, sy + u * 22, u * 10, 'rgba(255,255,255,0.5)', 'left', '800');
+
+    const mins = Math.floor((G.playTime || 0) / 60);
+    const rows = [
+      ['УБИЙСТВ', fmt(G.kills || 0)],
+      ['БОССОВ', fmt(G.stats.bosses || 0)],
+      ['ЗОЛОТА ВСЕГО', fmt(G.totalGold || 0)],
+      ['РЕКОРД ЗОНЫ', 'Z' + ((G.best && G.best.zone) || 1)],
+      ['ПЕРЕРОЖДЕНИЙ', fmt(G.prestiges || 0)],
+      ['В ИГРЕ', mins > 59 ? (mins / 60 | 0) + ' ч' : mins + ' мин']
+    ];
+    const colW = C.w / 3;
+    const sh = Math.min(shh, u * 88);
+    const rowGap = Math.max(u * 26, (sh - u * 34) / 2);
+    rows.forEach((r, i) => {
+      const cx2 = C.x + (i % 3) * colW + u * 16;
+      const cy2 = sy + u * 34 + Math.floor(i / 3) * rowGap;
+      txt(r[0], cx2, cy2, u * 8, 'rgba(255,255,255,0.36)', 'left', '700');
+      txt(r[1], cx2, cy2 + u * 13, u * 11.5, '#cfc4ff', 'left', '900');
+    });
   }
 }
 
@@ -2182,6 +2662,18 @@ function onDown(e) {
       }
       return;
     }
+    if (tab === 'rel') {
+      if (layout.dailyClaim && inRect(p, layout.dailyClaim)) {
+        const d = claimDaily();
+        if (d) showMsg('ДЕНЬ ' + ((G.daily.streak - 1) % 7 + 1) + ': ' + (d.what || ''));
+        else { showMsg('ЕЩЁ НЕ ГОТОВО'); Sfx.bad(); }
+        return;
+      }
+      for (const rc of layout.relicCards) {
+        if (inRect(p, rc)) { buyRelic(rc.id); return; }
+      }
+      return;
+    }
     /* upgrade cards */
     for (const c of layout.cards) {
       if (c._btn && inRect(p, c._btn)) { buy(c.key); return; }
@@ -2194,6 +2686,9 @@ function onDown(e) {
   if (inRect(p, shopButtonRect())) {
     shopOpen = true; shopT = 0; layoutShop(); Sfx.buy(); HAP('buy'); save(); return;
   }
+
+  /* ultimate button */
+  if (layout.ultBtn && inDisc(p, layout.ultBtn)) { useUlt(); return; }
 
   /* skill buttons */
   for (let i = 0; i < 4; i++) {
@@ -2348,6 +2843,87 @@ function drawAchToast() {
 /* ============================== MAIN RENDER ============================== */
 const camShake = () => ({ x: rand(-1, 1) * G2.shake, y: rand(-1, 1) * G2.shake });
 
+/* ============================== FX LAYERS ============================== */
+function groundShadow(x, w, a) {
+  const g = ctx.createRadialGradient(x, groundY + U * 3, 0, x, groundY + U * 3, w);
+  g.addColorStop(0, 'rgba(0,0,0,' + a + ')');
+  g.addColorStop(0.65, 'rgba(0,0,0,' + a * 0.45 + ')');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.save();
+  ctx.translate(x, groundY + U * 3);
+  ctx.scale(1, 0.20);
+  ctx.beginPath(); ctx.arc(0, 0, w, 0, TAU);
+  ctx.fillStyle = g; ctx.fill();
+  ctx.restore();
+}
+
+function heroAura(t) {
+  const zd = zoneDef(G.zone);
+  const pulse = 0.6 + 0.4 * Math.sin(t * 2.2);
+  const g = ctx.createRadialGradient(heroX, groundY - U * 46, U * 6, heroX, groundY - U * 46, U * 92);
+  g.addColorStop(0, hexA(zd.accent, 0.16 * pulse));
+  g.addColorStop(0.45, hexA(zd.accent, 0.06 * pulse));
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(heroX - U * 100, groundY - U * 150, U * 200, U * 200);
+  /* floor ring */
+  ctx.save();
+  ctx.translate(heroX, groundY + U * 2);
+  ctx.scale(1, 0.2);
+  ctx.strokeStyle = hexA(zd.accent, 0.22 + 0.14 * pulse);
+  ctx.lineWidth = Math.max(1, U * 2.2);
+  ctx.beginPath(); ctx.arc(0, 0, U * 52, 0, TAU); ctx.stroke();
+  ctx.restore();
+}
+
+function drawVignette() {
+  const g = ctx.createRadialGradient(W / 2, H * 0.52, Math.min(W, H) * 0.34, W / 2, H * 0.52, Math.max(W, H) * 0.78);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(1, 'rgba(0,0,0,0.46)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawComboBloom(t) {
+  if (G2.combo < 5) return;
+  const k = clamp((G2.combo - 5) / 45, 0, 1);
+  const a = k * clamp(G2.comboT / 1.4, 0, 1);
+  const col = G2.combo >= 20 ? '#ff8af0' : '#7cf3ff';
+  const g = ctx.createRadialGradient(heroX, groundY - U * 50, U * 20, heroX, groundY - U * 50, U * (110 + k * 70));
+  g.addColorStop(0, hexA(col, 0.12 * a));
+  g.addColorStop(0.6, hexA(col, 0.05 * a));
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+}
+
+function drawUltFx(t) {
+  if (G2.ultFx <= 0) return;
+  const p = 1 - G2.ultFx;          /* 0..1 progress */
+  const a = G2.ultFx;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  /* expanding shockwave rings */
+  for (let i = 0; i < 3; i++) {
+    const r = U * (60 + p * 420 + i * 90);
+    ctx.strokeStyle = hexA(i % 2 ? '#ff6ad5' : '#7cf3ff', a * (0.5 - i * 0.12));
+    ctx.lineWidth = Math.max(1.5, U * (7 - i * 1.8) * a);
+    ctx.beginPath(); ctx.arc(heroX, groundY - U * 46, r, 0, TAU); ctx.stroke();
+  }
+  /* vertical beam */
+  const bw2 = U * 26 * a;
+  const bg = ctx.createLinearGradient(heroX - bw2, 0, heroX + bw2, 0);
+  bg.addColorStop(0, hexA('#ff6ad5', 0));
+  bg.addColorStop(0.5, hexA('#ffffff', 0.5 * a));
+  bg.addColorStop(1, hexA('#ff6ad5', 0));
+  ctx.fillStyle = bg;
+  ctx.fillRect(heroX - bw2, 0, bw2 * 2, groundY + U * 10);
+  ctx.restore();
+}
+
 function render() {
   const u = U;
   const t = performance.now() / 1000;
@@ -2372,6 +2948,18 @@ function render() {
   drawFar(G2.zoneIn);
   drawGround(G2.zoneIn);
 
+  /* atmospheric haze between ground and actors */
+  const hz = ctx.createLinearGradient(0, groundY - worldH * 0.30, 0, groundY + U * 26);
+  hz.addColorStop(0, hexA(zoneDef(G.zone).accent, 0));
+  hz.addColorStop(0.75, hexA(zoneDef(G.zone).accent, 0.055));
+  hz.addColorStop(1, hexA(zoneDef(G.zone).accent, 0));
+  ctx.fillStyle = hz;
+  ctx.fillRect(0, groundY - worldH * 0.30, W, worldH * 0.30 + U * 26);
+
+  /* hero aura + shadow */
+  heroAura(t);
+  groundShadow(heroX, U * 54, 0.42);
+
   /* hero */
   const heroSt = G2.dead > 0 ? 'dead' : G2.atkAnim > 0.3 ? 'attack' : 'idle';
   const heroPh = t;
@@ -2388,8 +2976,13 @@ function render() {
   if (G2.monster) {
     const m = G2.monster;
     const lunge = m.lunge > 0 ? Math.sin(m.lunge * Math.PI) * U * 18 : 0;
+    groundShadow(m.x - lunge, m.mh * 0.55, m.boss ? 0.5 : 0.36);
     drawMonster(m, m.x - lunge, groundY, m.mh);
   }
+
+  /* ultimate shockwave */
+  drawUltFx(t);
+  drawComboBloom(t);
 
   /* typing: hero run animation trail */
   if (G2.atkAnim > 0) {
@@ -2410,6 +3003,9 @@ function render() {
 
   ctx.restore();
 
+  /* vignette over the world */
+  drawVignette();
+
   /* hud */
   drawHUD();
   drawShopButton();
@@ -2422,11 +3018,13 @@ function render() {
     ctx.globalAlpha = a;
     const by = H * 0.30;
     const bw = Math.min(W * 0.86, u * 460);
-    rr(W / 2 - bw / 2, by - u * 20, bw, u * 44, u * 8, 'rgba(10,4,20,0.72)');
+    rr(W / 2 - bw / 2, by - u * 20, bw, u * 58, u * 8, 'rgba(10,4,20,0.72)');
     ctx.strokeStyle = hexA('#ff4d5e', 0.8); ctx.lineWidth = Math.max(1.5, u * 2);
-    rr(W / 2 - bw / 2, by - u * 20, bw, u * 44, u * 8, null); ctx.stroke();
+    rr(W / 2 - bw / 2, by - u * 20, bw, u * 58, u * 8, null); ctx.stroke();
     txt('БОСС', W / 2, by - u * 6, u * 10, hexA('#ff4d5e', 0.9), 'center', '800');
     txt(m.name || 'БОСС', W / 2, by + u * 11, u * 16, '#ffe0e4', 'center', '900', bw - u * 20);
+    txt(FLAV.taunt[G.zone % FLAV.taunt.length], W / 2, by + u * 30, u * 9,
+      hexA('#ffb3ba', 0.72 * a), 'center', '600', bw - u * 20);
     ctx.restore();
   }
 
