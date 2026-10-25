@@ -3123,13 +3123,29 @@ const Doom = (() => {
       }
     };
     carve(1, 1);
-    /* пробиваем лишние проходы — иначе тесно */
-    for (let i = 0; i < w * h * 0.06; i++) {
-      const x = rint(1, w - 2), y = rint(1, h - 2);
-      if (g[y][x] === 1 && ((g[y - 1] && g[y - 1][x] === 0) || (g[y + 1] && g[y + 1][x] === 0))) g[y][x] = 0;
+    /* ── расширяем коридоры: пробиваем стены там, где с двух сторон открыто ── */
+    for (let pass = 0; pass < 2; pass++) {
+      for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+          if (g[y][x] !== 1) continue;
+          const n = (g[y - 1][x] === 0 ? 1 : 0) + (g[y + 1][x] === 0 ? 1 : 0);
+          const e = (g[y][x - 1] === 0 ? 1 : 0) + (g[y][x + 1] === 0 ? 1 : 0);
+          /* коридор «шириной в одну клетку» — сносим стенку, получаем проход 2 тайла */
+          if ((n >= 2 && e === 0) || (e >= 2 && n === 0)) g[y][x] = 0;
+          else if (n >= 1 && e >= 1 && Math.random() < 0.45) g[y][x] = 0;
+        }
+      }
+    }
+    /* ── залы: несколько больших комнат, чтобы было где развернуться ── */
+    const rooms = 3 + rint(0, 2);
+    for (let i = 0; i < rooms; i++) {
+      const rw = rint(4, 7), rh = rint(4, 7);
+      const rx = rint(1, Math.max(1, w - rw - 2)), ry = rint(1, Math.max(1, h - rh - 2));
+      for (let y = ry; y < ry + rh && y < h - 1; y++)
+        for (let x = rx; x < rx + rw && x < w - 1; x++) g[y][x] = 0;
     }
     /* большая комната-арена в центре */
-    const cw = rint(4, 6), ch2 = rint(4, 6);
+    const cw = rint(6, 9), ch2 = rint(6, 9);
     const c0x = Math.floor(w / 2 - cw / 2), c0y = Math.floor(h / 2 - ch2 / 2);
     for (let y = c0y; y < c0y + ch2; y++)
       for (let x = c0x; x < c0x + cw; x++)
@@ -3152,9 +3168,9 @@ const Doom = (() => {
   }
 
   const MTYPE = [
-    { hp: 30, sp: 0.9, r: 0.34, col: '#7ef07e', eye: '#ff3b3b', pts: 10, name: 'ЗОМБИ' },
-    { hp: 55, sp: 1.35, r: 0.30, col: '#ff9a3b', eye: '#fff35b', pts: 20, name: 'ИМП' },
-    { hp: 90, sp: 0.7, r: 0.42, col: '#a06bff', eye: '#ff3bd0', pts: 35, name: 'БАРОН' }
+    { hp: 34, sp: 0.95, r: 0.34, col: '#79d96b', dark: '#3f8a3a', eye: '#ff4d4d', pts: 10, name: 'ЗОМБИ', shape: 'zombie' },
+    { hp: 60, sp: 1.40, r: 0.31, col: '#ff9a3b', dark: '#a85a12', eye: '#fff35b', pts: 20, name: 'ИМП', shape: 'imp' },
+    { hp: 100, sp: 0.72, r: 0.44, col: '#9b6bff', dark: '#4e2f96', eye: '#ff54d8', pts: 35, name: 'БАРОН', shape: 'baron' }
   ];
 
   function spawnMobs(n) {
@@ -3169,7 +3185,7 @@ const Doom = (() => {
   }
 
   function newLevel() {
-    MW = rint(15, 21); MH = rint(15, 21);
+    MW = rint(19, 25); MH = rint(19, 25);
     if (MW % 2 === 0) MW++; if (MH % 2 === 0) MH++;
     map = genMap(MW, MH);
     const s = freeSpot();
@@ -3392,7 +3408,7 @@ const Doom = (() => {
     /* регенерация, если давно не били */
     if (!dead) {
       regen = hurt > 0 ? 0 : regen + dt;
-      if (regen > 3.5) hp = Math.min(100, hp + dt * 2.2);
+      if (regen > 3.0) hp = Math.min(100, hp + dt * 3.0);
     }
 
     if (mode === 'auto') autoBrain(dt);
@@ -3424,8 +3440,8 @@ const Doom = (() => {
         if (!solid(nx, m.y)) m.x = nx;
         if (!solid(m.x, ny)) m.y = ny;
       } else if (m.cd <= 0) {
-        hp -= m.t.hp > 60 ? 9 : m.t.hp > 40 ? 6 : 4;
-        m.cd = rnd(1.2, 2.1);
+        hp -= m.t.hp > 60 ? 7 : m.t.hp > 40 ? 5 : 3;
+        m.cd = rnd(1.4, 2.3);
         hurt = 0.28; beep(rnd(90, 130), 0.12, 'sawtooth', 0.07);
         if (hp <= 0) { hp = 0; dead = true; msg = 'ХОМЯК ПАЛ • ОЧКОВ ' + score; msgT = 99; setStatus('конец'); }
       }
@@ -3545,26 +3561,8 @@ const Doom = (() => {
       const cxp = W / 2 + Math.tan(v.rel) * (W / 2) / Math.tan(FOV / 2);
       const wdt = hgt * m.t.r * 1.6;
       const top = horizon - hgt * 0.52;
-      const col = m.hurt > 0 ? '#ffffff' : m.t.col;
       const sh = clamp(1 - v.dist / 26, 0.22, 1);
-      /* тело */
-      cx.globalAlpha = sh;
-      cx.fillStyle = col;
-      cx.fillRect(cxp - wdt / 2, top + hgt * 0.22, wdt, hgt * 0.5);
-      /* голова */
-      cx.beginPath();
-      cx.arc(cxp, top + hgt * 0.20, wdt * 0.32, 0, 6.2832);
-      cx.fill();
-      /* глаза */
-      cx.fillStyle = m.t.eye;
-      const ew = Math.max(1.4, wdt * 0.11);
-      cx.fillRect(cxp - wdt * 0.16, top + hgt * 0.17, ew, ew * 1.3);
-      cx.fillRect(cxp + wdt * 0.06, top + hgt * 0.17, ew, ew * 1.3);
-      /* полоска HP */
-      const hw = wdt * 1.05;
-      cx.fillStyle = 'rgba(0,0,0,.65)'; cx.fillRect(cxp - hw / 2, top + hgt * 0.02, hw, Math.max(2, hgt * 0.028));
-      cx.fillStyle = '#7ef07e'; cx.fillRect(cxp - hw / 2, top + hgt * 0.02, hw * (m.hp / m.max), Math.max(2, hgt * 0.028));
-      cx.globalAlpha = 1;
+      drawMobSprite(cxp, top, wdt, hgt, m, sh);
     }
 
     /* частицы */
@@ -3603,6 +3601,198 @@ const Doom = (() => {
       cx.fillText(msg, W / 2, H * 0.45);
       cx.textAlign = 'left'; cx.textBaseline = 'alphabetic';
     }
+  }
+
+  /* ── спрайт монстра: три разных силуэта с анимацией ходьбы ── */
+  function drawMobSprite(cx0, top, wdt, hgt, m, sh) {
+    const t = m.t;
+    const flashHurt = m.hurt > 0;
+    const col = flashHurt ? '#ffffff' : t.col;
+    const dark = flashHurt ? '#d8d8d8' : (t.dark || '#333');
+    const eye = flashHurt ? '#ff2b2b' : t.eye;
+    const ph = m.wob + animT * 7.5;          /* фаза шага */
+    const sw = Math.sin(ph);                  /* качание */
+    const bobUp = Math.abs(Math.cos(ph)) * hgt * 0.018;
+
+    const H2 = hgt, W2 = wdt;
+    const bx = cx0, by = top + bobUp;         /* центр тела */
+    const fat = t.shape === 'baron' ? 1.18 : t.shape === 'imp' ? 0.86 : 1;
+
+    cx.globalAlpha = sh;
+    cx.save();
+
+    /* тень на полу */
+    cx.globalAlpha = sh * 0.42;
+    cx.fillStyle = '#000';
+    cx.beginPath();
+    cx.ellipse(bx, top + H2 * 0.86, W2 * 0.62 * fat, H2 * 0.055, 0, 0, 6.2832);
+    cx.fill();
+    cx.globalAlpha = sh;
+
+    /* ── ноги (шагают) ── */
+    const legY = by + H2 * 0.50, legH = H2 * 0.34, legW = W2 * 0.24 * fat;
+    cx.fillStyle = dark;
+    cx.fillRect(bx - W2 * 0.30 * fat + sw * W2 * 0.06, legY, legW, legH);
+    cx.fillRect(bx + W2 * 0.06 * fat - sw * W2 * 0.06, legY, legW, legH);
+    /* ступни */
+    cx.fillStyle = '#140c1c';
+    cx.fillRect(bx - W2 * 0.34 * fat + sw * W2 * 0.06, legY + legH - H2 * 0.05, legW * 1.3, H2 * 0.055);
+    cx.fillRect(bx + W2 * 0.02 * fat - sw * W2 * 0.06, legY + legH - H2 * 0.05, legW * 1.3, H2 * 0.055);
+
+    /* ── торс ── */
+    const bodyTop = by + H2 * 0.13, bodyH = H2 * 0.42;
+    const bw = W2 * 0.66 * fat;
+    cx.fillStyle = col;
+    cx.beginPath();
+    if (t.shape === 'baron') {
+      /* широкие покатые плечи */
+      cx.moveTo(bx - bw * 0.62, bodyTop + bodyH * 0.12);
+      cx.lineTo(bx - bw * 0.30, bodyTop);
+      cx.lineTo(bx + bw * 0.30, bodyTop);
+      cx.lineTo(bx + bw * 0.62, bodyTop + bodyH * 0.12);
+      cx.lineTo(bx + bw * 0.46, bodyTop + bodyH);
+      cx.lineTo(bx - bw * 0.46, bodyTop + bodyH);
+    } else if (t.shape === 'imp') {
+      cx.moveTo(bx - bw * 0.38, bodyTop + bodyH * 0.18);
+      cx.lineTo(bx, bodyTop - bodyH * 0.06);
+      cx.lineTo(bx + bw * 0.38, bodyTop + bodyH * 0.18);
+      cx.lineTo(bx + bw * 0.44, bodyTop + bodyH);
+      cx.lineTo(bx - bw * 0.44, bodyTop + bodyH);
+    } else {
+      /* зомби — сутулый, с рваной грудой */
+      cx.moveTo(bx - bw * 0.46, bodyTop + bodyH * 0.10);
+      cx.lineTo(bx - bw * 0.24, bodyTop - bodyH * 0.02);
+      cx.lineTo(bx + bw * 0.24, bodyTop - bodyH * 0.02);
+      cx.lineTo(bx + bw * 0.46, bodyTop + bodyH * 0.10);
+      cx.lineTo(bx + bw * 0.40, bodyTop + bodyH);
+      cx.lineTo(bx - bw * 0.40, bodyTop + bodyH);
+    }
+    cx.closePath(); cx.fill();
+
+    /* светлая грудь / рёбра */
+    cx.fillStyle = flashHurt ? '#f0f0f0' : 'rgba(255,255,255,.16)';
+    cx.fillRect(bx - bw * 0.22, bodyTop + bodyH * 0.18, bw * 0.44, bodyH * 0.30);
+    if (t.shape === 'baron') {
+      /* рёбра-полосы */
+      cx.fillStyle = dark;
+      for (let i = 0; i < 4; i++)
+        cx.fillRect(bx - bw * 0.30, bodyTop + bodyH * (0.34 + i * 0.14), bw * 0.60, Math.max(1, H2 * 0.014));
+    }
+
+    /* ── руки ── */
+    const armY = bodyTop + bodyH * 0.16;
+    const armW = W2 * 0.20 * fat, armH = bodyH * 0.86;
+    cx.fillStyle = dark;
+    if (t.shape === 'zombie') {
+      /* вытянуты вперёд и в стороны */
+      cx.fillRect(bx - bw * 0.66 + sw * W2 * 0.03, armY - armH * 0.10, armW * 0.9, armH * 0.52);
+      cx.fillRect(bx + bw * 0.52 - sw * W2 * 0.03, armY - armH * 0.10, armW * 0.9, armH * 0.52);
+      /* кисти-когти */
+      cx.fillStyle = col;
+      cx.fillRect(bx - bw * 0.70 + sw * W2 * 0.03, armY + armH * 0.38, armW * 1.25, armH * 0.22);
+      cx.fillRect(bx + bw * 0.50 - sw * W2 * 0.03, armY + armH * 0.38, armW * 1.25, armH * 0.22);
+    } else {
+      cx.fillRect(bx - bw * 0.60 - sw * W2 * 0.02, armY, armW * 0.8, armH * 0.7);
+      cx.fillRect(bx + bw * 0.50 + sw * W2 * 0.02, armY, armW * 0.8, armH * 0.7);
+      /* лапы */
+      cx.fillStyle = col;
+      cx.beginPath();
+      cx.arc(bx - bw * 0.58 - sw * W2 * 0.02, armY + armH * 0.72, armW * 0.48, 0, 6.2832);
+      cx.arc(bx + bw * 0.54 + sw * W2 * 0.02, armY + armH * 0.72, armW * 0.48, 0, 6.2832);
+      cx.fill();
+    }
+
+    /* ── голова ── */
+    const hdR = W2 * (t.shape === 'baron' ? 0.30 : 0.33) * (t.shape === 'imp' ? 1.12 : 1);
+    const hdx = bx, hdy = bodyTop - hdR * 0.55;
+    cx.fillStyle = col;
+    cx.beginPath(); cx.arc(hdx, hdy, hdR, 0, 6.2832); cx.fill();
+
+    /* рога */
+    cx.fillStyle = flashHurt ? '#ddd' : (t.shape === 'imp' ? '#ffd166' : '#e8e0ff');
+    if (t.shape === 'baron') {
+      cx.beginPath();
+      cx.moveTo(hdx - hdR * 0.85, hdy - hdR * 0.45);
+      cx.lineTo(hdx - hdR * 1.55, hdy - hdR * 1.70);
+      cx.lineTo(hdx - hdR * 0.35, hdy - hdR * 0.95);
+      cx.closePath(); cx.fill();
+      cx.beginPath();
+      cx.moveTo(hdx + hdR * 0.85, hdy - hdR * 0.45);
+      cx.lineTo(hdx + hdR * 1.55, hdy - hdR * 1.70);
+      cx.lineTo(hdx + hdR * 0.35, hdy - hdR * 0.95);
+      cx.closePath(); cx.fill();
+    } else if (t.shape === 'imp') {
+      cx.beginPath();
+      cx.moveTo(hdx - hdR * 0.70, hdy - hdR * 0.60);
+      cx.lineTo(hdx - hdR * 1.05, hdy - hdR * 1.60);
+      cx.lineTo(hdx - hdR * 0.20, hdy - hdR * 0.90);
+      cx.closePath(); cx.fill();
+      cx.beginPath();
+      cx.moveTo(hdx + hdR * 0.70, hdy - hdR * 0.60);
+      cx.lineTo(hdx + hdR * 1.05, hdy - hdR * 1.60);
+      cx.lineTo(hdx + hdR * 0.20, hdy - hdR * 0.90);
+      cx.closePath(); cx.fill();
+    }
+
+    /* ── глаза: светящиеся ── */
+    const ew = Math.max(1.6, hdR * 0.30);
+    const eh = ew * (t.shape === 'imp' ? 1.5 : 1.15);
+    const eyY = hdy - hdR * 0.10 + Math.sin(ph * 0.5) * hdR * 0.02;
+    const eOff = hdR * 0.42;
+    /* свечение */
+    cx.globalAlpha = sh * 0.35;
+    cx.fillStyle = eye;
+    cx.beginPath();
+    cx.arc(hdx - eOff, eyY, ew * 1.5, 0, 6.2832);
+    cx.arc(hdx + eOff, eyY, ew * 1.5, 0, 6.2832);
+    cx.fill();
+    cx.globalAlpha = sh;
+    cx.fillStyle = eye;
+    cx.fillRect(hdx - eOff - ew / 2, eyY - eh / 2, ew, eh);
+    cx.fillRect(hdx + eOff - ew / 2, eyY - eh / 2, ew, eh);
+    /* зрачки */
+    cx.fillStyle = '#12030c';
+    cx.fillRect(hdx - eOff - ew * 0.16, eyY - eh * 0.16, ew * 0.32, eh * 0.32);
+    cx.fillRect(hdx + eOff - ew * 0.16, eyY - eh * 0.16, ew * 0.32, eh * 0.32);
+
+    /* ── пасть ── */
+    cx.fillStyle = '#140c1c';
+    const mw = hdR * (t.shape === 'baron' ? 1.05 : 0.72);
+    const my = hdy + hdR * 0.44;
+    cx.beginPath();
+    cx.ellipse(hdx, my, mw * 0.5, hdR * 0.20, 0, 0, 6.2832);
+    cx.fill();
+    /* зубы */
+    cx.fillStyle = flashHurt ? '#fff' : '#f2f0ff';
+    const tw = mw / (t.shape === 'baron' ? 6 : 4);
+    for (let i = 0; i < (t.shape === 'baron' ? 6 : 4); i++) {
+      const tx = hdx - mw * 0.5 + tw * (i + 0.5);
+      cx.beginPath();
+      cx.moveTo(tx - tw * 0.34, my - hdR * 0.16);
+      cx.lineTo(tx + tw * 0.34, my - hdR * 0.16);
+      cx.lineTo(tx, my + hdR * 0.10);
+      cx.closePath(); cx.fill();
+    }
+
+    cx.restore();
+
+    /* ── полоска HP над головой ── */
+    const hw = W2 * 1.02;
+    const barY = top - hgt * 0.30;
+    cx.globalAlpha = sh * 0.9;
+    cx.fillStyle = 'rgba(0,0,0,.72)';
+    cx.fillRect(cx0 - hw / 2, barY, hw, Math.max(2, hgt * 0.030));
+    const fr = clamp(m.hp / m.max, 0, 1);
+    cx.fillStyle = fr > 0.55 ? '#7ef07e' : fr > 0.25 ? '#ffd166' : '#ff5d5d';
+    cx.fillRect(cx0 - hw / 2, barY, hw * fr, Math.max(2, hgt * 0.030));
+    /* имя типа */
+    if (hgt > 120) {
+      cx.font = '700 ' + Math.round(clamp(hgt * 0.070, 8, 14)) + 'px ui-monospace,Consolas,monospace';
+      cx.textAlign = 'center'; cx.textBaseline = 'bottom';
+      cx.fillStyle = 'rgba(255,255,255,.75)';
+      cx.fillText(t.name, cx0, barY - Math.max(1, hgt * 0.016));
+    }
+    cx.globalAlpha = 1;
   }
 
   /* ── хомяк от первого лица: видны только лапы ─────────────── */
@@ -4056,7 +4246,10 @@ const Doom = (() => {
   }
   return { init, open, close, isOpen, start: startGame, snap,
     __mobs: () => mobs.map(m => ({ d: +Math.hypot(m.x - px, m.y - py).toFixed(2), hp: m.hp, wall: wallBetween(px, py, m.x, m.y), x: +m.x.toFixed(1), y: +m.y.toFixed(1) })),
-    __sim: (sec) => { const n = Math.round((sec || 1) * 60); for (let i = 0; i < n; i++) { try { update(1 / 60); } catch (e) { return 'ERR ' + e.message; } } return snap(); } };
+    __sim: (sec) => { const n = Math.round((sec || 1) * 60); for (let i = 0; i < n; i++) { try { update(1 / 60); } catch (e) { return 'ERR ' + e.message; } } return snap(); },
+    __dbg: (o) => { o = o || {}; if (o.px != null) px = o.px; if (o.py != null) py = o.py; if (o.pa != null) pa = o.pa;
+      if (o.mobs) mobs = o.mobs.map(q => { const t = MTYPE[q.t] || MTYPE[0]; return { x: q.x, y: q.y, t, hp: q.hp || t.hp, max: q.hp || t.hp, ang: 0, hurt: 0, cd: 5, wob: Math.random() * 6.28 }; });
+      return snap(); } };
 })();
 
 /* авто-инициализация оверлея */
