@@ -3083,6 +3083,8 @@ const Doom = (() => {
   let vx = 0, vy = 0;
   let hp = 100, score = 0, kills = 0, wave = 1, banned = 0;
   let mobs = [], shots = [], parts = [], pickups = [];
+  let floats = [], bolts = [], boss = null;
+  let combo = 0, comboT = 0, shake = 0, runGold = 0;
   let cool = 0, hurt = 0, flash = 0, msg = '', msgT = 0;
   let animT = 0, bob = 0, recoil = 0, dead = false, frames = 0, regen = 0;
   let punch = 0, punchSide = 1;
@@ -3182,6 +3184,61 @@ const Doom = (() => {
       const t = MTYPE[Math.min(MTYPE.length - 1, rint(0, wave > 2 ? 2 : wave > 1 ? 1 : 0))];
       mobs.push({ x: s.x, y: s.y, t, hp: t.hp, max: t.hp, ang: 0, hurt: 0, cd: rnd(0.4, 1.6), wob: rnd(0, 6.28) });
     }
+    /* каждые 5 волн — босс */
+    if (wave % 5 === 0) {
+      const s = freeSpot();
+      const bt = MTYPE[2];
+      const hp2 = bt.hp * (3 + wave * 0.35);
+      boss = { x: s.x, y: s.y, t: bt, hp: hp2, max: hp2, ang: 0, hurt: 0, cd: 2, wob: 0,
+               isBoss: true, sc: 2.1, sp: 0.55 };
+      mobs.push(boss);
+      msg = 'БОСС • ВОЛНА ' + wave; msgT = 2.6;
+    }
+  }
+
+  function nextWave() {
+    wave++;
+    msg = 'ВОЛНА ' + wave; msgT = 2;
+    spawnMobs(4 + wave * 2);
+  }
+
+  /* ── урон по мобу, смерть, дроп ──────────────────────────── */
+  function floatTxt(x, y, v, crit) {
+    floats.push({ x, y, v: Math.round(v), life: 0.9, crit: !!crit });
+    if (floats.length > 40) floats.shift();
+  }
+
+  function killMob(m) {
+    score += m.t.pts;
+    kills++;
+    combo++; comboT = 3.0;
+    const mult = 1 + Math.min(2, Math.floor(combo / 5) * 0.25);
+    const gain = Math.max(1, Math.round(m.t.pts * 0.6 * mult));
+    G.gold += gain; G.totalGold += gain; G.kills++;
+    runGold += gain;
+    for (let i = 0; i < 14; i++) parts.push({ x: m.x, y: m.y, vx: rnd(-2.4, 2.4), vy: rnd(-2.4, 2.4), life: rnd(0.3, 0.8), col: '#ff5566' });
+    const i0 = mobs.indexOf(m);
+    if (i0 >= 0) mobs.splice(i0, 1);
+    beep(rnd(70, 100), 0.16, 'sawtooth', 0.07);
+    shake = Math.max(shake, m.isBoss ? 0.5 : 0.14);
+    if (m.isBoss) {
+      boss = null;
+      for (let i = 0; i < 30; i++) parts.push({ x: m.x, y: m.y, vx: rnd(-4, 4), vy: rnd(-4, 4), life: rnd(0.5, 1.3), col: '#ffd166' });
+      pickups.push({ x: m.x, y: m.y, hp: 60 });
+      msg = 'БОСС ПОВЕРЖЕН! +' + gain; msgT = 2.6;
+    } else if (mobs.length === 0) nextWave();
+    /* аптечка */
+    if (!m.isBoss && (Math.random() < 0.18 || (hp < 45 && Math.random() < 0.45))) {
+      pickups.push({ x: m.x, y: m.y, hp: Math.round(rnd(14, 26)) });
+    }
+    if (pickups.length > 12) pickups.shift();
+  }
+
+  function hurtMob(m, dmg, crit) {
+    m.hp -= dmg;
+    m.hurt = 0.18;
+    floatTxt(m.x, m.y, dmg, crit);
+    if (m.hp <= 0) killMob(m);
   }
 
   function newLevel() {
@@ -3191,7 +3248,8 @@ const Doom = (() => {
     const s = freeSpot();
     px = s.x; py = s.y; pa = rnd(0, 6.28);
     vx = vy = 0;
-    shots = []; parts = []; pickups = [];
+    shots = []; parts = []; pickups = []; floats = []; bolts = []; boss = null;
+    combo = 0; comboT = 0; shake = 0;
     dead = false; hp = Math.max(60, hp);
     spawnMobs(4 + wave * 2);
     msg = 'КАРТА ' + MW + '×' + MH + ' • ВОЛНА ' + wave; msgT = 2.6;
@@ -3229,7 +3287,7 @@ const Doom = (() => {
     else beep(rnd(150, 190), 0.08, 'square', 0.06);
     const dx = Math.cos(pa), dy = Math.sin(pa);
     const cone = w.melee ? 0.5 : 0.72;
-    let best = null, bestD = 1e9;
+    const hits = [];
     for (const m of mobs) {
       const ddx = m.x - px, ddy = m.y - py;
       const d = Math.hypot(ddx, ddy);
@@ -3237,27 +3295,29 @@ const Doom = (() => {
       const dot = (ddx / d) * dx + (ddy / d) * dy;
       if (dot < cone) continue;
       if (wallBetween(px, py, m.x, m.y)) continue;
-      if (d < bestD) { bestD = d; best = m; }
+      hits.push({ m, d });
     }
-    if (best) {
-      const st = stats();
-      let dmg = w.dmg * dmgMul();
+    hits.sort((a, b) => a.d - b.d);
+    /* дробовик бьёт 2 цели, рейлган пробивает 3 */
+    const maxT = w.melee ? 1 : (G.raid.eq === 'shotgun' ? 2 : G.raid.eq === 'rail' ? 3 : 1);
+    const st = stats();
+    let n = 0;
+    for (const h of hits) {
+      if (n++ >= maxT) break;
+      const best = h.m;
+      let dmg = w.dmg * dmgMul() * (G.raid.eq === 'shotgun' ? 0.62 : 1);
       const isCrit = Math.random() < st.crit;
       if (isCrit) dmg *= st.cdmg;
-      best.hp -= dmg; best.hurt = 0.18;
       const pn = w.melee ? 9 : 7;
       for (let i = 0; i < pn; i++) parts.push({ x: best.x, y: best.y, vx: rnd(-1.6, 1.6), vy: rnd(-1.6, 1.6), life: rnd(0.2, 0.5), col: isCrit ? '#ffd166' : best.t.eye });
-      if (best.hp <= 0) {
-        score += best.t.pts; kills++;
-        /* общий баланс: золото в айдл-игру */
-        const gain = Math.max(1, Math.round(best.t.pts * 0.6));
-        G.gold += gain; G.totalGold += gain; G.kills++;
-        for (let i = 0; i < 14; i++) parts.push({ x: best.x, y: best.y, vx: rnd(-2.4, 2.4), vy: rnd(-2.4, 2.4), life: rnd(0.3, 0.8), col: '#ff5566' });
-        mobs.splice(mobs.indexOf(best), 1);
-        beep(rnd(70, 100), 0.16, 'sawtooth', 0.07);
-        if (mobs.length === 0) { wave++; msg = 'ВОЛНА ' + wave; msgT = 2; spawnMobs(4 + wave * 2); }
-      } else if (!w.melee) beep(rnd(300, 380), 0.05, 'triangle', 0.04);
+      hurtMob(best, dmg, isCrit);
+      if (!w.melee) bolts.push({ x0: px, y0: py, x1: best.x, y1: best.y, life: 0.09, col: isCrit ? '#ffd166' : '#9ff0ff' });
     }
+    if (!n && !w.melee) {
+      /* трассер в пустоту */
+      bolts.push({ x0: px, y0: py, x1: px + dx * Math.min(w.rng, 8), y1: py + dy * Math.min(w.rng, 8), life: 0.06, col: '#6f7fa0' });
+    }
+    if (n && !w.melee) beep(rnd(300, 380), 0.05, 'triangle', 0.04);
     flash = w.melee ? 0.04 : 0.09;
   }
 
@@ -3282,18 +3342,13 @@ const Doom = (() => {
     for (const m of mobs.slice()) {
       const d = Math.hypot(m.x - px, m.y - py);
       if (d > (id === 'meteor' ? 6 : id === 'tornado' ? 5 : 3.4)) continue;
-      m.hp -= dmg; m.hurt = 0.2; n++;
+      n++;
       for (let i = 0; i < 10; i++) parts.push({ x: m.x, y: m.y, vx: rnd(-2.4, 2.4), vy: rnd(-2.4, 2.4), life: rnd(0.2, 0.6), col: SKILLS[id].col });
-      if (m.hp <= 0) {
-        score += m.t.pts; kills++;
-        const gain = Math.max(1, Math.round(m.t.pts * 0.6));
-        G.gold += gain; G.totalGold += gain; G.kills++;
-        mobs.splice(mobs.indexOf(m), 1);
-      }
+      hurtMob(m, dmg, true);
     }
     flash = 0.10;
     msg = (SKNAME[id] || id) + (n ? ' ×' + n : ' ПУСТО'); msgT = 1.3;
-    if (mobs.length === 0) { wave++; spawnMobs(4 + wave * 2); msg = 'ВОЛНА ' + wave; msgT = 2; }
+    if (!mobs.length) nextWave();
   }
 
   function wallBetween(x0, y0, x1, y1) {
@@ -3430,22 +3485,42 @@ const Doom = (() => {
     /* монстры */
     for (const m of mobs) {
       if (m.hurt > 0) m.hurt -= dt;
+      if (m.wob != null) m.wob += dt * (m.isBoss ? 3.5 : 5);
       const dx = px - m.x, dy = py - m.y;
       const d = Math.hypot(dx, dy) || 1;
       m.ang = Math.atan2(dy, dx);
       m.cd -= dt;
       if (d > 0.85) {
-        const st = m.t.sp * dt;
+        const st = (m.isBoss ? 0.55 : m.t.sp) * dt;
         const nx = m.x + (dx / d) * st, ny = m.y + (dy / d) * st;
         if (!solid(nx, m.y)) m.x = nx;
         if (!solid(m.x, ny)) m.y = ny;
       } else if (m.cd <= 0) {
-        hp -= m.t.hp > 60 ? 7 : m.t.hp > 40 ? 5 : 3;
-        m.cd = rnd(1.4, 2.3);
-        hurt = 0.28; beep(rnd(90, 130), 0.12, 'sawtooth', 0.07);
+        const dmg = m.isBoss ? 11 : m.t.hp > 60 ? 7 : m.t.hp > 40 ? 5 : 3;
+        hp -= dmg;
+        m.cd = m.isBoss ? rnd(1.8, 2.4) : rnd(1.4, 2.3);
+        hurt = 0.28; shake = Math.max(shake, m.isBoss ? 0.45 : 0.2);
+        beep(rnd(90, 130), 0.12, 'sawtooth', 0.07);
         if (hp <= 0) { hp = 0; dead = true; msg = 'ХОМЯК ПАЛ • ОЧКОВ ' + score; msgT = 99; setStatus('конец'); }
       }
     }
+    if (comboT > 0) { comboT -= dt; if (comboT <= 0) combo = 0; }
+    if (shake > 0) shake = Math.max(0, shake - dt * 1.6);
+    /* подбор аптечек */
+    for (const p of pickups.slice()) {
+      const d = Math.hypot(p.x - px, p.y - py);
+      if (d < 0.75) {
+        hp = Math.min(100, hp + p.hp);
+        floatTxt(px, py, p.hp, false);
+        parts.push({ x: p.x, y: p.y, vx: 0, vy: 0, life: 0.5, col: '#5ee07a' });
+        pickups.splice(pickups.indexOf(p), 1);
+        beep(660, 0.1, 'sine', 0.06);
+      }
+    }
+    for (const b of bolts) b.life -= dt;
+    bolts = bolts.filter((b) => b.life > 0);
+    for (const f of floats) { f.life -= dt; f.y -= dt * 0.9; }
+    floats = floats.filter((f) => f.life > 0);
     for (const p of parts) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.94; p.vy *= 0.94; p.life -= dt; }
     parts = parts.filter((p) => p.life > 0);
   }
@@ -3455,7 +3530,7 @@ const Doom = (() => {
     if (!cx) return;
     const W = cvs.width, H = cvs.height;
     const FOV = Math.PI / 3;
-    const horizon = H * 0.5 + Math.sin(bob) * 2;
+    const horizon = H * 0.5 + Math.sin(bob) * 2 + (shake > 0 ? (Math.random() - 0.5) * shake * 26 : 0);
 
     /* потолок и пол */
     const sky = cx.createLinearGradient(0, 0, 0, horizon);
@@ -3472,6 +3547,19 @@ const Doom = (() => {
       cx.beginPath(); cx.moveTo(0, yy); cx.lineTo(W, yy); cx.stroke();
     }
     /* вертикальные линии пола из центра */
+
+    /* проекция мировой точки на экран (null если вне поля зрения) */
+    const proj = (wx, wy) => {
+      const dx = wx - px, dy = wy - py;
+      let rel = Math.atan2(dy, dx) - pa;
+      while (rel > Math.PI) rel -= Math.PI * 2;
+      while (rel < -Math.PI) rel += Math.PI * 2;
+      if (Math.abs(rel) > FOV * 0.62) return null;
+      return {
+        x: W / 2 + Math.tan(rel) * (W / 2) / Math.tan(FOV / 2),
+        y: horizon + (H * 0.30) / Math.max(0.7, Math.hypot(dx, dy))
+      };
+    };
 
     /* стены колонками — DDA, без пошагового марша */
     const cols = Math.max(120, Math.ceil(W / 2));
@@ -3557,9 +3645,10 @@ const Doom = (() => {
     vis.sort((a, b) => b.dist - a.dist);
     for (const v of vis) {
       const m = v.m;
-      const hgt = (H * 0.95) / Math.max(0.5, v.dist);
+      const sc = m.isBoss ? 2.0 : 1;
+      const hgt = (H * 0.95) / Math.max(0.5, v.dist) * sc;
       const cxp = W / 2 + Math.tan(v.rel) * (W / 2) / Math.tan(FOV / 2);
-      const wdt = hgt * m.t.r * 1.6;
+      const wdt = hgt * m.t.r * (m.isBoss ? 2.4 : 1.6);
       const top = horizon - hgt * 0.52;
       const sh = clamp(1 - v.dist / 26, 0.22, 1);
       /* отсечение по zbuf: моб не рисуется там, где перед ним стена */
@@ -3582,6 +3671,62 @@ const Doom = (() => {
       drawMobSprite(cxp, top, wdt, hgt, m, sh);
       cx.restore();
     }
+
+    /* трассеры выстрелов */
+    for (const b of bolts) {
+      const p0 = proj(b.x0, b.y0), p1 = proj(b.x1, b.y1);
+      if (!p0 || !p1) continue;
+      cx.globalAlpha = clamp(b.life * 10, 0, 1);
+      cx.strokeStyle = b.col; cx.lineWidth = 2;
+      cx.beginPath(); cx.moveTo(p0.x, p0.y); cx.lineTo(p1.x, p1.y); cx.stroke();
+      cx.globalAlpha = 1;
+    }
+
+    /* аптечки */
+    for (const p of pickups) {
+      const dx = p.x - px, dy = p.y - py;
+      const dist = Math.hypot(dx, dy);
+      let rel = Math.atan2(dy, dx) - pa;
+      while (rel > Math.PI) rel -= Math.PI * 2;
+      while (rel < -Math.PI) rel += Math.PI * 2;
+      if (Math.abs(rel) > FOV * 0.6) continue;
+      let ci = Math.floor((W / 2 + Math.tan(rel) * (W / 2) / Math.tan(FOV / 2)) / cw2);
+      ci = clamp(ci, 0, cols - 1);
+      if (zbuf[ci] < dist - 0.2) continue;
+      const hh = (H * 0.95) / Math.max(0.6, dist) * 0.16;
+      const sx = W / 2 + Math.tan(rel) * (W / 2) / Math.tan(FOV / 2);
+      const sy = horizon + hh * 1.6 + Math.sin(animT * 3 + p.x) * hh * 0.2;
+      cx.save();
+      cx.shadowColor = '#5ee07a'; cx.shadowBlur = 14;
+      cx.fillStyle = '#eaffea';
+      cx.fillRect(sx - hh * 0.28, sy - hh * 0.28, hh * 0.56, hh * 0.56);
+      cx.fillStyle = '#3ecf6a';
+      cx.fillRect(sx - hh * 0.045, sy - hh * 0.2, hh * 0.09, hh * 0.4);
+      cx.fillRect(sx - hh * 0.2, sy - hh * 0.045, hh * 0.4, hh * 0.09);
+      cx.restore();
+    }
+
+    /* цифры урона */
+    cx.textAlign = 'center'; cx.textBaseline = 'middle';
+    for (const f of floats) {
+      const dx = f.x - px, dy = f.y - py;
+      const dist = Math.hypot(dx, dy);
+      let rel = Math.atan2(dy, dx) - pa;
+      while (rel > Math.PI) rel -= Math.PI * 2;
+      while (rel < -Math.PI) rel += Math.PI * 2;
+      if (Math.abs(rel) > FOV * 0.65) continue;
+      const sx = W / 2 + Math.tan(rel) * (W / 2) / Math.tan(FOV / 2);
+      const sy = horizon - (H * 0.95) / Math.max(0.6, dist) * 0.42;
+      const sz = clamp((H * 0.95) / Math.max(0.6, dist) * 0.055, 9, 34) * (f.crit ? 1.5 : 1);
+      cx.globalAlpha = clamp(f.life * 1.6, 0, 1);
+      cx.font = '900 ' + Math.round(sz) + 'px ui-monospace,Consolas,monospace';
+      cx.fillStyle = 'rgba(0,0,0,.65)';
+      cx.fillText(f.v, sx + 2, sy + 2);
+      cx.fillStyle = f.crit ? '#ffd166' : '#ffffff';
+      cx.fillText(f.v, sx, sy);
+      cx.globalAlpha = 1;
+    }
+    cx.textAlign = 'left'; cx.textBaseline = 'alphabetic';
 
     /* частицы */
     for (const p of parts) {
@@ -3977,7 +4122,61 @@ const Doom = (() => {
     cx.fillStyle = '#c99cf0';
     cx.font = '700 ' + Math.round(u * 0.8) + 'px ui-monospace,Consolas,monospace';
     cx.fillText('УБИТО ' + kills + ' • ВОЛНА ' + wave, W - W * 0.04, H * 0.035 + u * 1.5);
+    cx.fillStyle = '#ffd166';
+    cx.fillText('+' + runGold + ' ЗОЛОТА', W - W * 0.04, H * 0.035 + u * 3.0);
     cx.textAlign = 'left';
+
+    /* комбо */
+    if (combo >= 3) {
+      const cf = clamp(comboT / 3, 0, 1);
+      cx.font = '900 ' + Math.round(u * 1.5) + 'px ui-monospace,Consolas,monospace';
+      cx.fillStyle = 'rgba(255,209,102,' + (0.45 + cf * 0.55).toFixed(2) + ')';
+      cx.fillText('КОМБО ×' + combo, W * 0.04, H * 0.035 + u * 3.2);
+      cx.fillStyle = 'rgba(255,209,102,.35)';
+      cx.fillRect(W * 0.04, H * 0.035 + u * 5.0, W * 0.20 * cf, 3);
+    }
+
+    /* полоса босса */
+    if (boss && mobs.indexOf(boss) >= 0) {
+      const bw2 = W * 0.56, bx2 = (W - bw2) / 2, by2 = H * 0.10;
+      cx.fillStyle = 'rgba(0,0,0,.65)'; cx.fillRect(bx2, by2, bw2, 12);
+      cx.fillStyle = '#ff4d72';
+      cx.fillRect(bx2, by2, bw2 * clamp(boss.hp / boss.max, 0, 1), 12);
+      cx.strokeStyle = '#ff9fd0'; cx.lineWidth = 1.5; cx.strokeRect(bx2, by2, bw2, 12);
+      cx.font = '900 ' + Math.round(u * 0.8) + 'px ui-monospace,Consolas,monospace';
+      cx.textAlign = 'center'; cx.fillStyle = '#ffd6ea';
+      cx.fillText('БОСС', W / 2, by2 + 16);
+      cx.textAlign = 'left';
+      cx.font = '700 ' + u + 'px ui-monospace,Consolas,monospace';
+    }
+
+    /* миникарта */
+    const mm = Math.min(W * 0.15, H * 0.17);
+    const mcx = W - mm - W * 0.035, mcy = H - mm - H * 0.045;
+    if (mm > 60) {
+      const cell = mm / Math.max(MW, MH);
+      cx.fillStyle = 'rgba(10,4,16,.72)';
+      cx.fillRect(mcx, mcy, mm, mm);
+      cx.strokeStyle = 'rgba(255,209,102,.5)'; cx.lineWidth = 1;
+      cx.strokeRect(mcx, mcy, mm, mm);
+      for (let y = 0; y < MH; y++) {
+        for (let x = 0; x < MW; x++) {
+          if (!map[y][x]) continue;
+          cx.fillStyle = 'rgba(160,60,90,.75)';
+          cx.fillRect(mcx + x * cell, mcy + y * cell, cell, cell);
+        }
+      }
+      for (const m of mobs) {
+        cx.fillStyle = m.isBoss ? '#ff4d72' : '#9ff0ff';
+        cx.fillRect(mcx + m.x * cell - 1.5, mcy + m.y * cell - 1.5, m.isBoss ? 4 : 3, m.isBoss ? 4 : 3);
+      }
+      for (const p of pickups) {
+        cx.fillStyle = '#5ee07a';
+        cx.fillRect(mcx + p.x * cell - 1, mcy + p.y * cell - 1, 2, 2);
+      }
+      cx.fillStyle = '#ffd166';
+      cx.fillRect(mcx + px * cell - 1.5, mcy + py * cell - 1.5, 3, 3);
+    }
 
     /* прицел */
     const mx = W / 2, my = H / 2;
@@ -4138,7 +4337,8 @@ const Doom = (() => {
 
   function startGame(m) {
     mode = m;
-    hp = 100; score = 0; kills = 0; wave = 1; dead = false;
+    hp = 100; score = 0; kills = 0; wave = 1; dead = false; runGold = 0;
+    combo = 0; comboT = 0; floats = []; bolts = []; boss = null; shake = 0;
     newLevel();
     const pick = el('dpick'); if (pick) pick.classList.remove('on');
     const ctl = el('dctl'); if (ctl) ctl.classList.toggle('on', m === 'manual');
