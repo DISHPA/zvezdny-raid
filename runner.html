@@ -5813,31 +5813,51 @@ function gameOver() {
 /* ═══ ввод ═══ */
 let downX = 0, downY = 0, downT = 0, moved = false;
 
-/* ── автобег: сам выбирает безопасную линию ── */
+/* ── автобег: максимум фарма, минимум застреваний ── */
 function autoLane() {
-  /* для каждой линии: ближайший объект впереди */
-  const threat = [999, 999, 999], hasMob = [0, 0, 0];
+  const D = 44;
+  const mobD = [1e9, 1e9, 1e9], obsD = [1e9, 1e9, 1e9], mobG = [0, 0, 0];
   for (const o of objs) {
-    if (o.dying != null) continue;
-    if (o.z < -30 || o.z > 3.2) continue;
+    if (o.dead || o.dying != null) continue;
+    if (o.z < -D || o.z > 3.0) continue;
     const li = o.g.position.x < -0.89 ? 0 : o.g.position.x > 0.89 ? 2 : 1;
-    const d = 3.2 - o.z;                       /* чем меньше — тем ближе */
-    if (o.type === 'obstacle') { if (d < threat[li]) threat[li] = d; }
-    else if (d < threat[li]) threat[li] = d;   /* моб: тоже цель, но безопаснее объехать блок */
-    if (o.type === 'mob') hasMob[li] = 1;
+    const d = -o.z;                                    /* расстояние впереди */
+    if (o.type === 'mob') {
+      if (d < mobD[li]) { mobD[li] = d; mobG[li] = o.gold; }
+    } else if (d < obsD[li]) obsD[li] = d;
   }
-  /* линия 0 даёт максимум свободы, но не дёргаемся без нужды */
-  let bestL = R.lane, bestScore = -1e9;
+  let bestL = R.lane, best = -1e9;
   for (let i = 0; i < 3; i++) {
-    const t = threat[i];
-    let s = Math.min(t, 18);                  /* чем дальше препятствие, тем лучше */
-    s -= Math.abs(i - R.lane) * 3.2;          /* штраф за лишние перестроения */
-    if (hasMob[i]) s += 2.2;                  /* бонус: там есть кого бить */
-    if (t < 5) s -= 26;                       /* близкое препятствие — почти запрет */
-    if (i === R.lane) s += 10;                /* инерция: остаёмся на месте */
-    if (s > bestScore) { bestScore = s; bestL = i; }
+    let s = 0;
+    const md = mobD[i], od = obsD[i];
+    /* фарм: чем ближе моб, тем выгоднее линия */
+    if (md < D) s += 50 - md * 0.9 + Math.min(14, mobG[i] * 0.5);
+    /* препятствие тормозит, если оно раньше моба */
+    if (od < Math.min(md, D)) s -= od < 7 ? 85 : od < 15 ? 46 : 20;
+    s -= Math.abs(i - R.lane) * 4.5;                   /* штраф за перестроение */
+    if (i === R.lane) s += 9;                          /* инерция */
+    if (md < 6) s += 18;                               /* уже почти в морде — добить */
+    if (s > best) { best = s; bestL = i; }
   }
   if (bestL !== R.lane) { R.lane = bestL; UI.hint.classList.remove('on'); }
+}
+
+/* ── авто-скиллы ── */
+function autoSkills() {
+  if (!R.on || R.shopPause) return;
+  let near = 0, mobs = 0, obs = 0, tough = 0;
+  for (const o of objs) {
+    if (o.dead || o.dying != null) continue;
+    if (o.z < -9.5 || o.z > 3) continue;
+    near++;
+    if (o.type === 'mob') mobs++; else obs++;
+    if (o.maxhp > 70 && o.hp > o.maxhp * 0.4) tough++;
+  }
+  if (near === 0 && R.hp > R.maxhp * 0.85) return;
+  if (SK.heal.t <= 0 && R.hp < R.maxhp * 0.6) trySkill('heal');
+  if (SK.whirl.t <= 0 && near >= 2) trySkill('whirl');
+  if (SK.rage.t <= 0 && (near >= 3 || tough >= 1 || mobs >= 2)) trySkill('rage');
+  if (SK.dash.t <= 0 && (mobs >= 3 || (mobs >= 2 && obs > 0) || (R.hp < R.maxhp * 0.35 && near >= 1))) trySkill('dash');
 }
 
 function swipe(dx) {
@@ -6058,7 +6078,7 @@ function step(dt) {
     }
 
     /* ── автобег: сам встаёт на безопасную линию ── */
-    if (G.auto && !R.shopPause) autoLane();
+    if (G.auto && !R.shopPause) { autoLane(); autoSkills(); }
 
     /* ── дорожка игрока ── */
     const tx = LANES[R.lane];
