@@ -4867,14 +4867,14 @@ scene.add(P.g);
   /* ── туловище ── */
   blob(bodyPivot, 0.52, FUR, 0, 0.66, 0, 1.05, 1.0, 0.94, 26);
   blob(bodyPivot, 0.352, CREAM, 0, 0.60, 0.315, 0.95, 0.98, 0.60, 24);
-  blob(bodyPivot, 0.25, FUR2, 0, 0.55, -0.34, 1.05, 0.9, 0.7, 18);
-  blob(bodyPivot, 0.10, CREAM, 0, 0.52, -0.48, 1, 1, 1, 14);
+  blob(bodyPivot, 0.20, FUR2, 0, 0.52, -0.40, 1.05, 0.92, 0.75, 18);
+  blob(bodyPivot, 0.115, CREAM, 0, 0.50, -0.53, 1, 1, 1, 14);
 
   /* ── голова ── */
   const head = new T.Group();
-  head.position.set(0, 1.28, 0.02);
+  head.position.set(0, 1.36, 0.02);
   bodyPivot.add(head); P.head = head;
-  blob(head, 0.40, FUR, 0, 0, 0, 1.06, 1.0, 0.98, 26);
+  blob(head, 0.375, FUR, 0, 0, 0, 1.08, 1.0, 0.98, 26);
   blob(head, 0.255, CREAM, 0, -0.10, 0.16, 1.25, 0.98, 0.95, 22);
   for (const s of [-1, 1]) {
     blob(head, 0.215, CREAM, s * 0.235, -0.055, 0.155, 1.15, 1.0, 0.98, 22);
@@ -4898,21 +4898,21 @@ scene.add(P.g);
   }
 
   /* ── бандана + плащ ── */
-  const scarf = new T.Mesh(new T.TorusGeometry(0.315, 0.075, 10, 26), M(0xe4472c));
-  scarf.position.set(0, 1.00, 0.02); scarf.rotation.x = Math.PI / 2 - 0.12; bodyPivot.add(scarf);
-  blob(bodyPivot, 0.10, 0xe4472c, 0.14, 0.965, 0.30, 1.15, 1, 0.85, 14);
-  blob(bodyPivot, 0.075, 0xc9351b, 0.10, 0.945, 0.33, 1, 1, 0.8, 12);
+  const scarf = new T.Mesh(new T.TorusGeometry(0.405, 0.082, 10, 28), M(0xe4472c));
+  scarf.position.set(0, 1.06, 0.02); scarf.rotation.x = Math.PI / 2 - 0.12; bodyPivot.add(scarf);
+  blob(bodyPivot, 0.105, 0xe4472c, 0.16, 1.005, 0.315, 1.15, 1, 0.85, 14);
+  blob(bodyPivot, 0.072, 0xc9351b, 0.12, 0.975, 0.355, 1, 1, 0.8, 12);
   P.tails = [];
 
   /* ── конечности ── */
   for (const s of [-1, 1]) {
     const k = s < 0 ? 'L' : 'R';
-    const arm = new T.Group(); arm.position.set(s * 0.40, 0.80, 0.10); bodyPivot.add(arm);
+    const arm = new T.Group(); arm.position.set(s * 0.47, 0.78, 0.06); arm.rotation.z = -s * 0.22; bodyPivot.add(arm);
     blob(arm, 0.115, FUR, s * 0.03, -0.10, 0, 1, 1.25, 1, 16);
     blob(arm, 0.105, CREAM, s * 0.04, -0.26, 0.03, 1, 1, 1, 16);
     P['arm' + k] = arm;
 
-    const leg = new T.Group(); leg.position.set(s * 0.30, 0.40, -0.02); bodyPivot.add(leg);
+    const leg = new T.Group(); leg.position.set(s * 0.29, 0.36, -0.02); bodyPivot.add(leg);
     blob(leg, 0.165, FUR, 0, -0.13, 0, 1, 1.15, 1, 16);
     blob(leg, 0.145, CREAM, 0, -0.305, 0.075, 1.05, 0.68, 1.50, 16);
     P['leg' + k] = leg;
