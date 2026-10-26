@@ -5439,7 +5439,7 @@ function instRig(rig, h) {
   }
   const mats = [];
   model.traverse((o) => { if ((o.isMesh || o.isSkinnedMesh) && o.material) mats.push(o); });
-  return { g, model, mixer, acts, mats };
+  return { g, model, mixer, acts, mats, spec: rig.spec };
 }
 
 async function loadModels() {
