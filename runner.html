@@ -61,8 +61,9 @@
     filter:drop-shadow(0 4px 10px rgba(0,0,0,.55))}
   .ov p{font-size:12px;color:#e7dcff;text-align:center;line-height:1.5;max-width:330px;font-weight:700;
     text-shadow:0 2px 6px rgba(0,0,0,.85)}
-  .ov .big{font-size:15px;color:#fff;text-align:center;line-height:1.7;font-weight:900;
-    text-shadow:0 2px 6px rgba(0,0,0,.8)}
+  .ov .big{font-size:14px;color:#fff;text-align:center;line-height:1.62;font-weight:900;
+    text-shadow:0 2px 6px rgba(0,0,0,.8);background:rgba(18,10,32,.78);border:2px solid #4a3468;
+    border-radius:16px;padding:10px 16px;max-width:330px}
   .ov .big em{color:#ffcc33;font-style:normal}
   .btn{pointer-events:auto;min-width:190px;padding:13px 20px;border-radius:16px;cursor:pointer;
     border:3px solid #2b1e3a;font-family:inherit;font-weight:900;font-size:15px;letter-spacing:.6px;
@@ -72,6 +73,8 @@
   .btn.g{background:linear-gradient(#9dff8a,#35c94a);color:#0d2a10;box-shadow:0 5px 0 #166d22}
   .btn.d{background:linear-gradient(#b9a6d6,#7e68a8);color:#1b1029;box-shadow:0 5px 0 #453063}
   .btn.sm{min-width:0;padding:9px 14px;font-size:12px;border-radius:12px}
+  .btn.tg{background:linear-gradient(#7fd0ff,#2a9fe0);color:#04283d;box-shadow:0 5px 0 #175f88;
+    min-width:190px;padding:11px 16px;font-size:12.5px}
 
   /* магазин */
   #shop .list{width:100%;max-width:430px;display:flex;flex-direction:column;gap:7px;
@@ -90,8 +93,18 @@
   #shop .row button.no{background:#3a2a52;color:#7a679c;box-shadow:0 3px 0 #241636}
   #shop .row button.max{background:#2b1e3a;color:#6f5b90;box-shadow:0 3px 0 #1a0f26}
 
-  #dmg{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:9}
-  .dn{position:absolute;font-size:19px;color:#fff;-webkit-text-stroke:4px #2b1e3a;paint-order:stroke fill;
+  /* офлайн-фарм */
+  #overtxt .off{display:block;margin-top:6px;font-size:12px;color:#9dff8a}
+  #offline{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:40;display:none;
+    flex-direction:column;align-items:center;gap:8px;padding:18px 22px;border-radius:20px;
+    border:3px solid #2b1e3a;background:linear-gradient(#2d2044,#1a1029);max-width:300px;
+    box-shadow:0 12px 30px rgba(0,0,0,.6)}
+  #offline.on{display:flex}
+  #offline h2{font-size:16px;color:#ffcc33;letter-spacing:.6px;text-align:center}
+  #offline .g{font-size:26px;color:#9dff8a;text-shadow:0 3px 0 #166d22}
+  #offline small{font-size:10.5px;color:#a892cc;text-align:center;line-height:1.4}
+
+  #dmg{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:9}  .dn{position:absolute;font-size:19px;color:#fff;-webkit-text-stroke:4px #2b1e3a;paint-order:stroke fill;
     will-change:transform,opacity;font-weight:900}
   .dn.c{color:#ffd166;font-size:24px}
   .dn.p{color:#ff6b8a;font-size:17px}
@@ -132,12 +145,14 @@
   <div class="big" id="startstats"></div>
   <button class="btn g" id="btnRun">БЕЖАТЬ</button>
   <button class="btn d" id="btnShop0">МАГАЗИН</button>
+  <button class="btn tg" id="btnTg">ОТКРЫТЬ В TELEGRAM</button>
 </div>
 
 <div class="ov" id="over">
   <h1 id="overt">ЗАБЕГ ОКОНЧЕН</h1>
   <div class="big" id="overtxt"></div>
   <button class="btn g" id="btnAgain">ЕЩЁ РАЗ</button>
+  <button class="btn d" id="revive" style="display:none">🔥 ПОДНЯТЬСЯ (1)</button>
   <button class="btn d" id="btnShop1">МАГАЗИН</button>
 </div>
 
@@ -146,6 +161,13 @@
   <div class="big" id="shopCoins"></div>
   <div class="list" id="shopList"></div>
   <button class="btn sm" id="btnShopX">ЗАКРЫТЬ</button>
+</div>
+
+<div id="offline">
+  <h2>ПОКА ТЕБЯ НЕ БЫЛО</h2>
+  <div class="g" id="offGold">🪙 0</div>
+  <small id="offNote">хомяк бегал сам</small>
+  <button class="btn sm g" id="btnOffOk">ЗАБРАТЬ</button>
 </div>
 
 <script>
@@ -5145,17 +5167,26 @@ async function loadModels() {
 
 /* ═══ состояние ═══ */
 const SAVE_KEY = 'hrunner_v1';
-const MAXLV = { spd: 12, atk: 12, dmg: 15, gold: 12, hp: 10, crush: 8 };
-const BASE = { spd: 30, atk: 34, dmg: 40, gold: 30, hp: 26, crush: 55 };
+const MAXLV = { spd: 999, atk: 999, dmg: 999, gold: 999, hp: 999, crush: 999,
+  regen: 999, crit: 60, armor: 40, cd: 40, bank: 300, luck: 40 };
+const BASE = { spd: 30, atk: 34, dmg: 40, gold: 30, hp: 26, crush: 55,
+  regen: 70, crit: 90, armor: 110, cd: 120, bank: 150, luck: 140 };
 const SHOP = [
   { k: 'spd', ic: '👟', n: 'СКОРОСТЬ БЕГА', d: '+6% к скорости за уровень' },
   { k: 'atk', ic: '⚡', n: 'СКОРОСТЬ АТАКИ', d: '+8% к частоте ударов' },
   { k: 'dmg', ic: '💪', n: 'СИЛА УДАРА', d: '+12% к урону' },
   { k: 'gold', ic: '🪙', n: 'ЖАДНОСТЬ', d: '+10% к золоту' },
   { k: 'hp', ic: '❤️', n: 'ЗДОРОВЬЕ', d: '+15 к максимальному HP' },
-  { k: 'crush', ic: '🔨', n: 'КРУШИТЕЛЬ', d: '+20% урона по препятствиям' }
+  { k: 'crush', ic: '🔨', n: 'КРУШИТЕЛЬ', d: '+20% урона по препятствиям' },
+  { k: 'regen', ic: '🌿', n: 'РЕГЕНЕРАЦИЯ', d: '+0.55 HP в секунду' },
+  { k: 'crit', ic: '🎯', n: 'КРИТ. УДАР', d: '+2.5% шанс крита (x2.2)' },
+  { k: 'armor', ic: '🛡', n: 'БРОНЯ', d: '-8% входящего урона' },
+  { k: 'cd', ic: '⏳', n: 'ПЕРЕЗАРЯДКА', d: '-5% к откату скиллов' },
+  { k: 'bank', ic: '🏦', n: 'ОФЛАЙН-ФАРМ', d: '+40% к доходу, пока тебя нет' },
+  { k: 'luck', ic: '🍀', n: 'УДАЧА', d: '+2% шанс двойного золота' }
 ];
-let G = { coins: 0, best: 0, runs: 0, up: { spd: 0, atk: 0, dmg: 0, gold: 0, hp: 0, crush: 0 } };
+let G = { coins: 0, best: 0, runs: 0, deaths: 0, lastSeen: 0,
+  up: { spd: 0, atk: 0, dmg: 0, gold: 0, hp: 0, crush: 0, regen: 0, crit: 0, armor: 0, cd: 0, bank: 0, luck: 0 } };
 function load() {
   try {
     const d = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
@@ -5163,14 +5194,32 @@ function load() {
       G.coins = +d.coins || 0;
       G.best = +d.best || 0;
       G.runs = +d.runs || 0;
+      G.deaths = +d.deaths || 0;
+      G.lastSeen = +d.lastSeen || 0;
       if (d.up) for (const k in G.up) if (typeof d.up[k] === 'number') G.up[k] = Math.min(MAXLV[k], Math.max(0, d.up[k] | 0));
     }
   } catch (e) { }
 }
-function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(G)); } catch (e) { } }
+function save() { G.lastSeen = Date.now(); try { localStorage.setItem(SAVE_KEY, JSON.stringify(G)); } catch (e) { } }
 load();
 
-const cost = (k) => Math.round(BASE[k] * Math.pow(1.55, G.up[k]));
+/* ═══ офлайн-фарм: доход, пока игра закрыта (макс 4 часа) ═══ */
+let OFF = null;
+(function offlineFarm() {
+  const now = Date.now();
+  let sec = G.lastSeen ? (now - G.lastSeen) / 1000 : 0;
+  if (sec > 14400) sec = 14400;
+  G.lastSeen = now;
+  if (sec < 60 || G.best < 40) return;
+  const rate = 0.012 * (1 + G.up.bank * 0.40) * (1 + G.up.gold * 0.06) * Math.pow(1 + G.best / 120, 0.85);
+  OFF = { coins: Math.max(1, Math.round(rate * sec)), sec: Math.round(sec) };
+})();
+
+const cost = (k) => Math.round(BASE[k] * Math.pow(k === 'bank' ? 1.32 : 1.42, G.up[k]));
+const cdMul = () => 1 / (1 + G.up.cd * 0.05);
+const luckCh = () => Math.min(0.5, G.up.luck * 0.02);
+const critCh = () => Math.min(0.65, G.up.crit * 0.025);
+const dmgCut = () => 1 / (1 + G.up.armor * 0.09);
 
 /* ═══ прогресс забега ═══ */
 const LANES = [-1.78, 0, 1.78];
@@ -5179,7 +5228,7 @@ const R = {
   lane: 1, x: 0, speed: 9, slowT: 0, tier: 1,
   atkTimer: 0, atkAnim: 0, target: null, combo: 0, comboT: 0,
   rageT: 0, dashT: 0, ifrT: 0, shake: 0, steps: 0,
-  nextSpawn: 12, t: 0, popped: 0
+  nextSpawn: 12, t: 0, popped: 0, usedPhoenix: false
 };
 const objs = [];
 const fx = [];
@@ -5191,7 +5240,7 @@ const UI = {
   combo: el('combo'), hint: el('hint'), dmgLayer: el('dmg'),
   start: el('start'), over: el('over'), shop: el('shop'), shopG: el('btnShopG'),
   startstats: el('startstats'), overtxt: el('overtxt'), shopCoins: el('shopCoins'),
-  shopList: el('shopList')
+  shopList: el('shopList'), revive: el('revive'), offline: el('offline')
 };
 
 /* ═══ скилы ═══ */
@@ -5222,8 +5271,13 @@ const rnd = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 function shake(v) { R.shake = Math.min(1, R.shake + v); }
 function dmgNow() {
-  const base = 9 * (1 + G.up.dmg * 0.12);
+  const lv = G.up.dmg;
+  const base = 9 * (1 + lv * 0.12) * (1 + lv * lv * 0.0022);
   return base * (R.rageT > 0 ? 2 : 1);
+}
+function rollDmg() {
+  const d = dmgNow();
+  return Math.random() < critCh() ? d * 2.2 : d;
 }
 
 /* частицы */
@@ -5276,13 +5330,15 @@ function addObj(type, lane, z) {
   const bar = makeBar();
   bar.position.set(0, built.rig ? built.scale * 2.05 : (type === 'mob' ? 1.85 : 2.0), 0);
   built.g.add(bar);
-  const hp = type === 'mob' ? (12 + tier * 8) : (62 + tier * 34);
+  const hp = type === 'mob'
+    ? Math.round(12 + tier * 8 + Math.pow(tier, 1.30) * 1.1)
+    : Math.round(62 + tier * 34 + Math.pow(tier, 1.28) * 4);
   const o = {
     type, lane, z, hp, maxhp: hp, dead: false,
     g: built.g, body: built.body || null, mats: built.mats || null,
     rig: built.rig || null,
     bar, flash: 0, wob: Math.random() * 6.28, sc: built.scale,
-    gold: type === 'mob' ? Math.round(2 + tier * 1.1 + rnd(0, 2)) : Math.round(1 + tier * 0.55),
+    gold: type === 'mob' ? Math.round((2 + tier * 1.1) * (1 + Math.pow(tier, 1.35) * 0.35)) : Math.round((1 + tier * 0.55) * (1 + Math.pow(tier, 1.30) * 0.28)),
     leak: type === 'mob' ? (7 + tier * 2.5) : (12 + tier * 4),
     bob: Math.random() * 6.28
   };
@@ -5295,6 +5351,8 @@ function addObj(type, lane, z) {
 function hitObj(o, amount, silent) {
   if (o.dead) return;
   let d = amount;
+  let crit = false;
+  if (!silent && Math.random() < critCh()) { d *= 2.2; crit = true; }
   if (o.type === 'obs') d *= 1 + G.up.crush * 0.2;
   d = Math.max(1, Math.round(d));
   o.hp -= d;
@@ -5312,8 +5370,9 @@ function hitObj(o, amount, silent) {
   }
   if (!silent) {
     R.atkAnim = 1;
-    dn('-' + d, o.g.position.x, o.type === 'mob' ? 1.5 : 1.7, o.z, '');
-    burst(o.g.position.x, o.type === 'mob' ? 1.0 : 1.1, o.z, o.type === 'mob' ? 0xffe066 : 0xd8d8e0, 5);
+    dn(crit ? 'КРИТ -' + d : '-' + d, o.g.position.x, o.type === 'mob' ? 1.5 : 1.7, o.z, crit ? 'c' : '');
+    burst(o.g.position.x, o.type === 'mob' ? 1.0 : 1.1, o.z, o.type === 'mob' ? 0xffe066 : 0xd8d8e0, crit ? 9 : 5);
+    if (crit) shake(0.25);
   }
   const fg = o.bar.userData.fg;
   fg.scale.x = Math.max(0, o.hp / o.maxhp);
@@ -5326,11 +5385,13 @@ function killObj(o) {
   R.combo = Math.min(20, R.combo + 1);
   R.comboT = 1.5;
   const mult = 1 + Math.min(1.2, (R.combo - 1) * 0.08);
-  const gold = Math.max(1, Math.round(o.gold * (1 + G.up.gold * 0.1) * mult));
+  let gold = Math.max(1, Math.round(o.gold * (1 + G.up.gold * 0.1) * mult));
+  const double = Math.random() < luckCh();
+  if (double) gold *= 2;
   R.coins += gold;
   G.coins += gold;
   burst(o.g.position.x, o.type === 'mob' ? 1.0 : 1.0, o.z, o.type === 'mob' ? 0xffd166 : 0xb8b8c4, 12);
-  dn('+' + gold, o.g.position.x, o.type === 'mob' ? 1.9 : 2.0, o.z, 'c');
+  dn(double ? '+' + gold + ' x2' : '+' + gold, o.g.position.x, o.type === 'mob' ? 1.9 : 2.0, o.z, 'c');
   if (R.combo >= 3) showCombo();
   if (R.target === o) R.target = null;
   save();
@@ -5354,6 +5415,7 @@ function showCombo() {
 /* ═══ урон игроку ═══ */
 function hurt(v) {
   if (R.ifrT > 0 || !R.on) return;
+  v *= dmgCut();
   R.hp -= v;
   R.ifrT = 0.55;
   R.combo = 0;
@@ -5413,7 +5475,10 @@ function resetRun() {
   R.atkTimer = 0; R.atkAnim = 0; R.target = null;
   R.combo = 0; R.comboT = 0; R.rageT = 0; R.dashT = 0; R.ifrT = 0; R.shake = 0;
   R.nextSpawn = 14; R.t = 0;
-  for (const k in SK) SK[k].t = 0;
+  R.usedPhoenix = false;
+  for (const k in SK) { SK[k].t = 0; SK[k].last = SK[k].cd; }
+  UI.revive.style.display = 'none';
+  UI.offline.classList.remove('on');
   UI.combo.classList.remove('on');
   UI.start.classList.remove('on');
   UI.over.classList.remove('on');
@@ -5429,9 +5494,13 @@ function gameOver() {
   if (R.over) return;
   R.on = false; R.over = true;
   if (R.dist > G.best) { G.best = Math.floor(R.dist); }
-  G.runs++;
+  G.runs++; G.deaths++;
   save();
-  UI.overtxt.innerHTML = 'ДИСТАНЦИЯ: <em>' + Math.floor(R.dist) + ' м</em><br>ЗОЛОТА: <em>+🪙 ' + R.coins + '</em><br>РЕКОРД: <em>' + Math.floor(G.best) + ' м</em>';
+  const ph = !R.usedPhoenix;
+  UI.revive.style.display = ph ? 'block' : 'none';
+  UI.overtxt.innerHTML = 'ДИСТАНЦИЯ: <em>' + Math.floor(R.dist) + ' м</em> • ВОЛНА: <em>' + R.tier +
+    '</em><br>ЗОЛОТА: <em>+🪙 ' + R.coins + '</em><br>РЕКОРД: <em>' + Math.floor(G.best) + ' м</em>' +
+    (ph ? '<span class="off">🔥 есть один шанс подняться</span>' : '');
   UI.over.classList.add('on');
   UI.combo.classList.remove('on');
   UI.shopG.classList.remove('on');
@@ -5468,7 +5537,8 @@ function trySkill(k) {
   const s = SK[k];
   if (!s || !R.on || s.t > 0) return;
   if (s.f() === false) return;
-  s.t = s.cd;
+  s.t = s.cd * cdMul();
+  s.last = s.t;
   renderSkills();
 }
 document.querySelectorAll('#skills button').forEach((b) => {
@@ -5479,13 +5549,28 @@ function renderSkills() {
     const b = skBtns[k]; if (!b) continue;
     const s = SK[k];
     const u = b.querySelector('u');
-    u.style.height = (s.t > 0 ? (s.t / s.cd) * 100 : 0) + '%';
+    u.style.height = (s.t > 0 ? (s.t / (s.last || s.cd)) * 100 : 0) + '%';
     b.classList.toggle('rdy', s.t <= 0 && R.on);
   }
 }
 
 el('btnRun').onclick = () => { resetRun(); };
 el('btnAgain').onclick = () => { resetRun(); };
+UI.revive.onclick = () => {
+  if (R.usedPhoenix || !R.over) return;
+  R.usedPhoenix = true;
+  R.over = false; R.on = true;
+  R.hp = Math.round(R.maxhp * 0.55);
+  R.ifrT = 2.4; R.dashT = 1.6;
+  R.combo = 0;
+  for (const o of objs) { if (o.z > -9 && o.z < 3) hitObj(o, 99999, true); }
+  burst(R.x, 1.2, 0, 0xffd166, 22);
+  popText('ПОДЪЁМ!', 0.4, 1.0);
+  UI.over.classList.remove('on');
+  UI.shopG.classList.add('on');
+  syncHUD();
+  save();
+};
 function openShop(from) {
   R.shopPause = true;
   R.shopFrom = from || (R.on ? 'game' : (R.over ? 'over' : 'start'));
@@ -5506,9 +5591,35 @@ el('btnShopX').onclick = () => {
 };
 
 /* Telegram */
+const TG_URL = 'https://t.me/zvezdny_raid_bot/runner';
 try {
-  if (window.Telegram && Telegram.WebApp) { Telegram.WebApp.ready(); Telegram.WebApp.expand(); }
+  if (window.Telegram && Telegram.WebApp) {
+    const tw = Telegram.WebApp;
+    tw.ready(); tw.expand();
+    if (tw.setHeaderColor) tw.setHeaderColor('#7fd3ff');
+    if (tw.disableVerticalSwipes) tw.disableVerticalSwipes();
+  }
 } catch (e) { }
+const inTg = !!(window.Telegram && Telegram.WebApp && Telegram.WebApp.initData);
+if (inTg) { const bt = el('btnTg'); if (bt) bt.style.display = 'none'; }
+const btnTg = el('btnTg');
+if (btnTg) btnTg.onclick = () => { try { window.open(TG_URL, '_blank'); } catch (e) { location.href = TG_URL; } };
+
+/* ═══ офлайн-фарм: показ и получение ═══ */
+function showOffline() {
+  if (!OFF) return;
+  const box = el('offline');
+  el('offGold').textContent = '🪙 ' + OFF.coins;
+  const m = Math.floor(OFF.sec / 60);
+  el('offNote').innerHTML = 'хомяк бегал сам ' + (m >= 60 ? Math.floor(m / 60) + ' ч ' + (m % 60) + ' мин' : m + ' мин') +
+    '<br>уровень «Офлайн-фарм»: ' + G.up.bank + ' — качай, чтобы получать больше';
+  box.classList.add('on');
+  el('btnOffOk').onclick = () => {
+    box.classList.remove('on');
+    if (OFF) { G.coins += OFF.coins; OFF = null; save(); syncHUD(); renderStart(); renderShop(); }
+  };
+}
+setTimeout(showOffline, 350);
 
 /* ═══ цикл ═══ */
 let last = performance.now();
@@ -5561,6 +5672,9 @@ function step(dt) {
   if (R.rageT > 0) R.rageT -= dt;
   if (R.dashT > 0) R.dashT -= dt;
   if (R.ifrT > 0) R.ifrT -= dt;
+  if (R.on && R.hp < R.maxhp && G.up.regen > 0) {
+    R.hp = Math.min(R.maxhp, R.hp + G.up.regen * 0.55 * dt);
+  }
   if (R.comboT > 0) { R.comboT -= dt; if (R.comboT <= 0) { R.combo = 0; UI.combo.classList.remove('on'); } }
 
   /* ── окружение ── */
@@ -5747,6 +5861,7 @@ function step(dt) {
 
 /* стартовый экран */
 renderStart();
+syncHUD();
 renderSkills();
 requestAnimationFrame(frame);
 
