@@ -31,6 +31,12 @@
     box-shadow:0 3px 0 #8a5b00;display:none;align-items:center;justify-content:center;padding:0}
   #btnShopG.on{display:flex}
   #btnShopG:active{transform:translateY(3px);box-shadow:0 0 0 #8a5b00}
+  #btnAuto{pointer-events:auto;width:36px;height:32px;border-radius:11px;cursor:pointer;
+    border:3px solid #2b1e3a;background:linear-gradient(#e6f0ff,#a9c6e8);font-size:15px;line-height:1;
+    box-shadow:0 3px 0 #4a6c94;display:none;align-items:center;justify-content:center;padding:0}
+  #btnAuto.on{display:flex}
+  #btnAuto.act{background:linear-gradient(#a8ffb0,#33cc55);box-shadow:0 0 0 3px rgba(60,255,120,.35),0 3px 0 #1c7a30}
+  #btnAuto:active{transform:translateY(3px);box-shadow:0 0 0 #4a6c94}
 
   #combo{position:absolute;left:50%;top:52px;transform:translateX(-50%) scale(.6);opacity:0;
     font-size:26px;color:#ffcc33;-webkit-text-stroke:4px #2b1e3a;paint-order:stroke fill;
@@ -144,6 +150,7 @@
     <div id="hpwrap"><i id="hpfill"></i><span id="hptxt">100</span></div>
     <div id="dist">0 м</div>
     <div id="coins">🪙 0</div>
+    <button id="btnAuto">🤖</button>
     <button id="btnShopG">🛒</button>
   </div>
   <div id="combo"></div>
@@ -5456,7 +5463,7 @@ const SHOP = [
   { k: 'bank', ic: '🏦', n: 'ОФЛАЙН-ФАРМ', d: '+40% к доходу, пока тебя нет' },
   { k: 'luck', ic: '🍀', n: 'УДАЧА', d: '+2% шанс двойного золота' }
 ];
-let G = { coins: 0, best: 0, runs: 0, deaths: 0, lastSeen: 0,
+let G = { coins: 0, best: 0, runs: 0, deaths: 0, lastSeen: 0, auto: 0,
   up: { spd: 0, atk: 0, dmg: 0, gold: 0, hp: 0, crush: 0, regen: 0, crit: 0, armor: 0, cd: 0, bank: 0, luck: 0 } };
 function load() {
   try {
@@ -5467,6 +5474,7 @@ function load() {
       G.runs = +d.runs || 0;
       G.deaths = +d.deaths || 0;
       G.lastSeen = +d.lastSeen || 0;
+      G.auto = d.auto ? 1 : 0;
       if (d.up) for (const k in G.up) if (typeof d.up[k] === 'number') G.up[k] = Math.min(MAXLV[k], Math.max(0, d.up[k] | 0));
     }
   } catch (e) { }
@@ -5512,7 +5520,7 @@ const UI = {
   start: el('start'), over: el('over'), shop: el('shop'), shopG: el('btnShopG'),
   startstats: el('startstats'), overtxt: el('overtxt'), shopCoins: el('shopCoins'),
   shopList: el('shopList'), revive: el('revive'), offline: el('offline'),
-  spd: el('spd')
+  spd: el('spd'), auto: el('btnAuto')
 };
 /* скоростные линии — только когда включён рывок/высокая скорость */
 (function speedLines() {
@@ -5779,6 +5787,8 @@ function resetRun() {
   R.shopPause = false;
   UI.hint.classList.add('on');
   UI.shopG.classList.add('on');
+  if (UI.auto) UI.auto.classList.add('on');
+  syncAuto();
   setTimeout(() => UI.hint.classList.remove('on'), 4200);
   syncHUD();
   renderSkills();
@@ -5802,6 +5812,34 @@ function gameOver() {
 
 /* ═══ ввод ═══ */
 let downX = 0, downY = 0, downT = 0, moved = false;
+
+/* ── автобег: сам выбирает безопасную линию ── */
+function autoLane() {
+  /* для каждой линии: ближайший объект впереди */
+  const threat = [999, 999, 999], hasMob = [0, 0, 0];
+  for (const o of objs) {
+    if (o.dying != null) continue;
+    if (o.z < -30 || o.z > 3.2) continue;
+    const li = o.g.position.x < -0.89 ? 0 : o.g.position.x > 0.89 ? 2 : 1;
+    const d = 3.2 - o.z;                       /* чем меньше — тем ближе */
+    if (o.type === 'obstacle') { if (d < threat[li]) threat[li] = d; }
+    else if (d < threat[li]) threat[li] = d;   /* моб: тоже цель, но безопаснее объехать блок */
+    if (o.type === 'mob') hasMob[li] = 1;
+  }
+  /* линия 0 даёт максимум свободы, но не дёргаемся без нужды */
+  let bestL = R.lane, bestScore = -1e9;
+  for (let i = 0; i < 3; i++) {
+    const t = threat[i];
+    let s = Math.min(t, 18);                  /* чем дальше препятствие, тем лучше */
+    s -= Math.abs(i - R.lane) * 3.2;          /* штраф за лишние перестроения */
+    if (hasMob[i]) s += 2.2;                  /* бонус: там есть кого бить */
+    if (t < 5) s -= 26;                       /* близкое препятствие — почти запрет */
+    if (i === R.lane) s += 10;                /* инерция: остаёмся на месте */
+    if (s > bestScore) { bestScore = s; bestL = i; }
+  }
+  if (bestL !== R.lane) { R.lane = bestL; UI.hint.classList.remove('on'); }
+}
+
 function swipe(dx) {
   if (!R.on) return;
   if (dx > 22 && R.lane < 2) R.lane++;
@@ -5874,6 +5912,16 @@ function openShop(from) {
 }
 el('btnShop0').onclick = () => openShop('start');
 el('btnShopG').onclick = () => openShop(R.on ? 'game' : 'start');
+function syncAuto() {
+  if (!UI.auto) return;
+  UI.auto.classList.toggle('act', !!G.auto);
+}
+if (UI.auto) UI.auto.onclick = () => {
+  G.auto = G.auto ? 0 : 1;
+  syncAuto(); save();
+  if (G.auto) UI.hint.classList.remove('on');
+};
+syncAuto();
 el('btnShop1').onclick = () => openShop('over');
 el('btnShopX').onclick = () => {
   UI.shop.classList.remove('on');
@@ -6008,6 +6056,9 @@ function step(dt) {
       spawnWave();
       R.nextSpawn = R.dist + 11 + Math.random() * 6 - Math.min(5, R.tier * 0.35);
     }
+
+    /* ── автобег: сам встаёт на безопасную линию ── */
+    if (G.auto && !R.shopPause) autoLane();
 
     /* ── дорожка игрока ── */
     const tx = LANES[R.lane];
