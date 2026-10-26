@@ -5309,25 +5309,25 @@ function makeBar() {
 const RIG = { hero: null, mobs: [], ok: false };
 
 const RIG_SPEC = [
-  { id: 'rat', file: 'rat', h: 1.20, flip: Math.PI, span: 1.85,
+  { id: 'rat', file: 'rat', h: 1.20, flip: 0, span: 1.85,
     tint: ['#a89b96', '#f2a8a2'],
     run: ['rat_run', 'run'], atk: ['rat_attack', 'attack'], die: ['death'] },
-  { id: 'spider', file: 'spider', h: 1.20, flip: Math.PI, span: 1.70,
+  { id: 'spider', file: 'spider', h: 1.20, flip: 0, span: 1.70,
     tint: ['#5d3a72', '#e0483c'],
     run: ['spider_walk', 'walk'], atk: ['spider_attack', 'attack'], die: ['death'] },
   { id: 'wasp', file: 'wasp', h: 1.30, flip: -Math.PI / 2, span: 1.20, lift: 0.60,
     tint: ['#2f2f2f', '#ff9f1c', '#ffd93b', '#d6ecff'],
     run: ['wasp_flying', 'flying', 'fly'], atk: ['wasp_attack', 'attack'], die: ['death'] },
-  { id: 'bat', file: 'm_bat', h: 1.05, flip: Math.PI, span: 1.45, lift: 0.55,
+  { id: 'bat', file: 'm_bat', h: 1.05, flip: 0, span: 1.45, lift: 0.55,
     tint: ['#7b4bd0', '#a06be8', '#5b2fa0'],
     run: ['bat_flying', 'flying'], atk: ['bat_attack2', 'bat_attack'], die: ['bat_death', 'death'] },
-  { id: 'slime', file: 'm_slime', h: 1.00, flip: Math.PI, span: 1.35,
+  { id: 'slime', file: 'm_slime', h: 1.00, flip: -Math.PI / 2, span: 1.35,
     tint: ['#4bd07b', '#8ce85b'],
     run: ['slime_walk', 'walk'], atk: ['slime_attack', 'attack'], die: ['slime_death', 'death'] },
-  { id: 'skel', file: 'm_skel', h: 1.65, flip: Math.PI, span: 1.30,
+  { id: 'skel', file: 'm_skel', h: 1.65, flip: 0, span: 1.30,
     tint: ['#efe6d0', '#d8cbb0', '#8a7f6d'],
     run: ['skeleton_running', 'running', 'run'], atk: ['skeleton_attack', 'attack'], die: ['skeleton_death', 'death'] },
-  { id: 'dragon', file: 'm_dragon', h: 1.75, flip: Math.PI, span: 2.30, lift: 0.15,
+  { id: 'dragon', file: 'm_dragon', h: 1.75, flip: 0, span: 2.30, lift: 0.15,
     tint: ['#e0483c', '#c23b30', '#f0a03c'],
     run: ['dragon_flying', 'flying'], atk: ['dragon_attack2', 'dragon_attack'], die: ['dragon_death', 'death'] }
 ];
@@ -5680,6 +5680,27 @@ function addObj(type, lane, z, elite) {
   return o;
 }
 
+/* ═══ удары ближнего боя: четыре разных стиля ═══ */
+const STRIKES = [
+  { k: 'jab', col: 0xfff3b0, dur: 1.00, side: 1, rot: -0.55 },   /* прямой правой */
+  { k: 'hook', col: 0xffd166, dur: 1.08, side: -1, rot: 1.05 },  /* боковой крюк слева */
+  { k: 'upper', col: 0xff9a3c, dur: 1.14, side: 1, rot: 1.55 },  /* апперкот снизу */
+  { k: 'kick', col: 0x9fe8ff, dur: 1.22, side: -1, rot: -0.15 }  /* вертушка ногой */
+];
+R.atkStyle = 0;
+
+/* росчерк удара */
+function slash(y, z, col, rot, side) {
+  const g = new T.RingGeometry(0.52, 1.02, 22, 1, 0, 2.15);
+  const m = new T.Mesh(g, new T.MeshBasicMaterial({
+    color: col, transparent: true, side: T.DoubleSide, depthWrite: false
+  }));
+  m.position.set(R.x, y, z);
+  m.rotation.set(0.28, side * 0.55, rot);
+  scene.add(m);
+  fx.push({ m, ring: true, life: 0.22, t: 0, vx: 0, vy: 0.5, vz: 0.6, grow: 3.1, spin: side * 7 });
+}
+
 /* ═══ удар / смерть ═══ */
 function hitObj(o, amount, silent) {
   if (o.dead) return;
@@ -5702,7 +5723,11 @@ function hitObj(o, amount, silent) {
     }, 520);
   }
   if (!silent) {
+    R.atkStyle = (R.atkStyle + 1) % STRIKES.length;
+    const st = STRIKES[R.atkStyle];
+    R.atkCur = st;
     R.atkAnim = 1;
+    slash(o.type === 'mob' ? 1.05 : 1.15, o.z + 0.2, st.col, st.rot, st.side);
     dn(crit ? 'КРИТ -' + d : '-' + d, o.g.position.x, o.type === 'mob' ? 1.5 : 1.7, o.z, crit ? 'c' : '');
     burst(o.g.position.x, o.type === 'mob' ? 1.0 : 1.1, o.z, o.type === 'mob' ? 0xffe066 : 0xd8d8e0, crit ? 11 : 6);
     ring(o.g.position.x, o.type === 'mob' ? 1.0 : 1.0, o.z + 0.15, crit ? 0xff9a3c : 0xfff0b0, crit);
@@ -6130,21 +6155,63 @@ function step(dt) {
     P.g.rotation.z = (tx - R.x) * -0.22;
 
     /* ── анимация бега ── */
-    if (R.atkAnim > 0) R.atkAnim = Math.max(0, R.atkAnim - dt * 5.5);
+    if (R.atkAnim > 0) R.atkAnim = Math.max(0, R.atkAnim - dt * (5.5 / (R.atkCur ? R.atkCur.dur : 1)));
     const spdPh = t * (9 + (R.speed || 9) * 0.5);
     const bp = P.body;
     if (R.atkAnim > 0) {
       const sw = Math.sin((1 - R.atkAnim) * Math.PI);
-      bp.rotation.x = -0.34 * sw;
-      bp.position.z = 0.16 * sw;
-      bp.scale.set(1 + 0.10 * sw, 1 - 0.06 * sw, 1 + 0.06 * sw);
-      P.armR.rotation.x = -2.05 * sw;
-      P.armL.rotation.x = 0.9 * sw;
-      P.armR.rotation.z = 0; P.armL.rotation.z = 0;
-      P.legL.rotation.x = 0.45 * sw; P.legR.rotation.x = -0.45 * sw;
-      P.head.rotation.x = -0.22 * sw;
+      const sk = R.atkCur ? R.atkCur.k : 'jab';
+      const sd = R.atkCur ? R.atkCur.side : 1;
+      if (sk === 'kick') {
+        /* вертушка: корпус проворачивается, обе руки в стороны, бьёт задняя нога */
+        bp.rotation.x = 0.12 * sw;
+        bp.rotation.y = sd * 1.05 * sw;
+        bp.position.z = 0.10 * sw;
+        bp.scale.set(1, 1 + 0.05 * sw, 1);
+        P.armR.rotation.x = -0.55 * sw; P.armL.rotation.x = -0.55 * sw;
+        P.armR.rotation.z = -1.45 * sw; P.armL.rotation.z = 1.45 * sw;
+        P.legL.rotation.x = -1.75 * sw; P.legR.rotation.x = -0.55 * sw;
+        P.head.rotation.x = 0.1 * sw;
+      } else if (sk === 'upper') {
+        /* апперкот: присед и выброс правой снизу вверх */
+        bp.rotation.x = -0.16 * sw;
+        bp.rotation.y = -sd * 0.42 * sw;
+        bp.position.y = -0.16 * sw;
+        bp.position.z = 0.10 * sw;
+        bp.scale.set(1 - 0.05 * sw, 1 + 0.11 * sw, 1 - 0.03 * sw);
+        P.armR.rotation.x = -2.65 * sw;
+        P.armL.rotation.x = 0.55 * sw;
+        P.armR.rotation.z = 0.22 * sw; P.armL.rotation.z = 0.30 * sw;
+        P.legL.rotation.x = -0.30 * sw; P.legR.rotation.x = 0.30 * sw;
+        P.head.rotation.x = -0.30 * sw;
+      } else if (sk === 'hook') {
+        /* боковой крюк левой через корпус */
+        bp.rotation.x = -0.20 * sw;
+        bp.rotation.y = sd * 0.85 * sw;
+        bp.position.z = 0.14 * sw;
+        bp.scale.set(1 + 0.07 * sw, 1 - 0.04 * sw, 1 + 0.05 * sw);
+        P.armL.rotation.x = -1.05 * sw;
+        P.armL.rotation.z = -1.15 * sw;
+        P.armR.rotation.x = 0.75 * sw;
+        P.armR.rotation.z = -0.55 * sw;
+        P.legL.rotation.x = 0.42 * sw; P.legR.rotation.x = -0.42 * sw;
+        P.head.rotation.x = -0.14 * sw;
+        P.head.rotation.z = sd * 0.18 * sw;
+      } else {
+        /* прямой джеб правой */
+        bp.rotation.x = -0.34 * sw;
+        bp.rotation.y = sd * 0.30 * sw;
+        bp.position.z = 0.16 * sw;
+        bp.scale.set(1 + 0.10 * sw, 1 - 0.06 * sw, 1 + 0.06 * sw);
+        P.armR.rotation.x = -2.05 * sw;
+        P.armL.rotation.x = 0.9 * sw;
+        P.armR.rotation.z = 0; P.armL.rotation.z = 0;
+        P.legL.rotation.x = 0.45 * sw; P.legR.rotation.x = -0.45 * sw;
+        P.head.rotation.x = -0.22 * sw;
+      }
     } else {
       const b = Math.sin(spdPh * 2);
+      bp.rotation.y = 0;
       bp.position.y = 0.055 * Math.abs(Math.sin(spdPh));
       bp.position.z = 0;
       bp.scale.set(1 + 0.03 * b, 1 - 0.04 * b, 1 + 0.02 * b);
@@ -6249,6 +6316,7 @@ function step(dt) {
     if (f.ring) {
       f.m.scale.setScalar(1 + k * (f.grow || 7));
       f.m.position.y += f.vy * dt;
+      if (f.spin) f.m.rotation.z += f.spin * dt;
       f.m.material.opacity = (1 - k) * (1 - k);
     } else {
       f.m.position.x += f.vx * dt;
