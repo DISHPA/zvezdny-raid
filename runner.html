@@ -5550,7 +5550,7 @@ async function loadModels() {
 const PH = { g: new T.Group(), rig: null, on: false, atkT: 0, lunge: 0 };
 function installHero() {
   if (!RIG.hero || PH.on) return;
-  const spec = { flip: 0, h: 1.78 };
+  const spec = { flip: Math.PI, h: 1.78 };
   const rig = (function () {
     const model = T.SkeletonUtils.clone(RIG.hero.scene);
     model.rotation.y = spec.flip;
