@@ -5930,11 +5930,13 @@ function addObj(type, lane, z, elite, boss) {
   bar.position.set(0, built.rig ? built.scale * 2.05 : (type === 'mob' ? 1.85 : 2.0), 0);
   built.g.add(bar);
   const df = DF(tier);
-  const eMul = boss ? 26 : elite ? 3.4 : 1;
+  const eMul = boss ? 90 : elite ? 3.4 : 1;
   let hp = type === 'mob'
     ? Math.round(12 + tier * 8 + Math.pow(tier, 1.30) * 1.1)
     : Math.round(38 + tier * 20 + Math.pow(tier, 1.28) * 2.5);
   hp = Math.round(hp * (type === 'mob' ? df : Math.pow(df, 0.72)) * eMul);
+  /* босс всегда живёт ~45 ударов текущего оружия: иначе его сносят за секунду */
+  if (boss) hp = Math.round(Math.max(hp, dmgNow() * 220));
   const o = {
     type, lane, z, hp, maxhp: hp, dead: false, elite: !!elite, boss: !!boss,
     g: built.g, body: built.body || null, mats: built.mats || null,
@@ -5981,6 +5983,8 @@ function slash(y, z, col, rot, side) {
 /* ═══ удар / смерть ═══ */
 function hitObj(o, amount, silent) {
   if (o.dead) return;
+  /* босс неуязвим, пока сам не встал поперёк дороги — иначе его сносят на дистанции */
+  if (o.boss && !o.engaged) return;
   let d = amount;
   let crit = false;
   if (!silent && Math.random() < critCh()) { d *= 2.2; crit = true; }
@@ -6220,15 +6224,40 @@ function renderCraft() {
 /* ── авто-скиллы ── */
 
 /* ═══ урон игроку ═══ */
-function hurt(v) {
-  if (R.ifrT > 0 || !R.on) return;
+function hurt(v, force, pierce) {
+  if (!R.on) return;
+  if (R.ifrT > 0 && !force) return;
+  const raw = v;
   v *= dmgCut();
+  /* удар босса пробивает часть брони */
+  if (pierce) v = Math.max(v, raw * pierce);
   R.hp -= v;
   R.ifrT = 0.55;
   R.combo = 0;
   shake(0.85);
   dn('-' + Math.round(v), R.x, 1.6, 0.4, 'p');
   if (R.hp <= 0) { R.hp = 0; gameOver(); }
+}
+
+/* ═══ босс бьёт героя ═══ */
+function bossStrike(o) {
+  if (!R.on || o.dead) return;
+  const tier = R.tier;
+  /* удар босса всегда проходит сквозь неуязвимость — иначе его можно перестоять */
+  const base = R.maxhp * Math.min(0.34, 0.10 + tier * 0.0022);
+  const d = Math.max(1, Math.round(base * (1 + Math.random() * 0.25)));
+  hurt(d, true, 0.75);
+  R.ifrT = 0.25;
+  /* анимация замаха босса */
+  if (o.rig && o.rig.acts.atk) {
+    const a = o.rig.acts.atk;
+    if (o.rig.acts.run) o.rig.acts.run.fadeOut(0.1);
+    a.reset().setLoop(T.LoopOnce, 1).fadeIn(0.08).play();
+    a.clampWhenFinished = false;
+  }
+  ring(o.g.position.x, 0.9, o.z + 1.2, 0xff5a4a, true);
+  burst(o.g.position.x, 1.3, o.z + 0.8, 0xff5a4a, 10);
+  shake(1);
 }
 
 /* ═══ UI ═══ */
@@ -6667,6 +6696,26 @@ function step(dt) {
     }
   }
   R.blocked = blocked;
+  /* ── босс перекрывает дорогу: не пробежать, пока не убьёшь ── */
+  let bossBlock = null;
+  if (R.on) {
+    for (const o of objs) {
+      if (!o.boss || o.dead) continue;
+      if (o.z < -4.4) continue;
+      bossBlock = o; break;
+    }
+  }
+  if (bossBlock && !bossBlock.engaged) { bossBlock.engaged = true; popText('⚠ БОСС ⚠', 0, 1.9); shake(0.7); }
+  R.bossFight = !!bossBlock;
+
+  /* ── босс бьёт героя ── */
+  if (bossBlock) {
+    bossBlock.atkT = (bossBlock.atkT == null ? 0.8 : bossBlock.atkT) - dt;
+    if (bossBlock.atkT <= 0) {
+      bossBlock.atkT = 2.1;
+      bossStrike(bossBlock);
+    }
+  }
   /* упёрся в стену — «толпа набегает»: стоять нельзя, иначе вечный тупик */
   if (blocked && R.on && R.tier >= 12) {
     R.crushT = (R.crushT || 0) + dt;
@@ -6677,6 +6726,8 @@ function step(dt) {
   let spd = 9 * (1 + G.up.spd * 0.06);  if (R.dashT > 0) spd *= 1.65;
   if (R.slowT > 0) { spd *= 0.45; R.slowT -= dt; }
   if (blocked) spd = 0;
+  /* босс встал поперёк дороги: бег и весь мир замирают, пока он жив */
+  if (bossBlock) spd = 0;
   if (R.on) { R.dist += spd * dt; R.tier = 1 + Math.floor(R.dist / 120); }
   R.speed = spd;
   if (UI.spd) {
@@ -6835,6 +6886,8 @@ function step(dt) {
         continue;
       }
       o.z += scroll;
+      /* босс сам догоняет героя и встаёт поперёк дороги */
+      if (o.boss && o.z < -3.4) o.z = Math.min(-3.4, o.z + Math.min(14, 6 + R.tier * 0.05) * dt);
       o.g.position.z = o.z;
       /* покачивание */
       if (o.type === 'mob') {
@@ -6894,8 +6947,10 @@ function step(dt) {
       if (o.z > bestZ) { bestZ = o.z; best = o; }
     }
     R.target = best;
+    /* босс — приоритетная цель, пока стоит поперёк дороги */
+    if (bossBlock && !bossBlock.dead) best = bossBlock;
     /* преграда вплотную важнее моба: иначе моб «прикрывает» стену и бег стоит вечно */
-    if (R.blocked && (R.blocked.z < -6 || !best)) best = R.blocked;
+    if (!bossBlock && R.blocked && (R.blocked.z < -6 || !best)) best = R.blocked;
     if (best) {
       R.atkTimer -= dt;
       if (R.atkTimer <= 0) {
