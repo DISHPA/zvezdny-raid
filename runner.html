@@ -15,13 +15,14 @@
   /* ── HUD ── */
   #hud{position:absolute;inset:0;pointer-events:none;z-index:10}
   #top{position:absolute;left:10px;right:10px;top:8px;display:flex;align-items:center;gap:8px}
-  #hpwrap{position:relative;flex:1;max-width:190px;height:26px;border-radius:13px;
+  #hpwrap{position:absolute;left:10px;right:10px;top:46px;height:24px;border-radius:12px;
     background:rgba(24,16,34,.72);border:3px solid #2b1e3a;overflow:hidden;
     box-shadow:0 3px 0 rgba(0,0,0,.35)}
-  #hpfill{display:block;height:100%;width:100%;border-radius:9px;
+  #hpfill{display:block;height:100%;width:100%;border-radius:8px;
     background:linear-gradient(#8dff6b,#2fbe3f);transition:width .12s linear}
+  #hpfill.low{background:linear-gradient(#ff9a6b,#e0392f)}
   #hptxt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-    font-size:12px;color:#0e2410;text-shadow:0 1px 0 rgba(255,255,255,.45);letter-spacing:.5px}
+    font-size:13px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.65);letter-spacing:.5px}
   #dist{font-size:15px;color:#fff;padding:3px 10px;border-radius:11px;background:rgba(24,16,34,.72);
     border:3px solid #2b1e3a;box-shadow:0 3px 0 rgba(0,0,0,.35)}
   #coins{font-size:15px;color:#ffcc33;padding:3px 10px;border-radius:11px;background:rgba(24,16,34,.72);
@@ -175,7 +176,7 @@
   @media (max-width:520px){
     #skills button{width:58px;height:58px;border-radius:16px}
     #skills button b{font-size:20px}
-    #hpwrap{max-width:150px;height:24px}
+    #hpwrap{height:22px}
     .ov h1{font-size:23px}
   }
 </style>
@@ -187,13 +188,13 @@
 <div id="dmg"></div>
 <div id="hud">
   <div id="top">
-    <div id="hpwrap"><i id="hpfill"></i><span id="hptxt">100</span></div>
     <div id="dist">0 м</div>
     <div id="coins">🪙 0</div>
     <button id="btnAuto">🤖</button>
     <button id="btnShopG">🛒</button>
     <button id="btnCraftG">⚒</button>
   </div>
+  <div id="hpwrap"><i id="hpfill"></i><span id="hptxt">100 / 100</span></div>
   <div id="combo"></div>
   <div id="hint">свайп влево / вправо</div>
   <div id="skills">
@@ -5424,13 +5425,17 @@ function parseGLB(buf) {
   return new Promise((res, rej) => new T.GLTFLoader().parse(buf, '', res, rej));
 }
 function clipFor(clips, keys) {
-  for (const k of keys) {
+  for (const k0 of keys) {
+    const k = String(k0).toLowerCase();
     for (const c of clips) {
       const n = c.name.toLowerCase();
       if (n === k || n.endsWith('|' + k) || n.endsWith('_' + k)) return c;
     }
   }
-  for (const k of keys) for (const c of clips) if (c.name.toLowerCase().indexOf(k) >= 0) return c;
+  for (const k0 of keys) {
+    const k = String(k0).toLowerCase();
+    for (const c of clips) if (c.name.toLowerCase().indexOf(k) >= 0) return c;
+  }
   return null;
 }
 function cartoonify(root, tint) {
@@ -5542,7 +5547,7 @@ async function loadModels() {
   RIG.ok = true;}
 
 /* ═══ установка воина вместо процедурного персонажа ═══ */
-const PH = { g: new T.Group(), rig: null, on: false, atkT: 0 };
+const PH = { g: new T.Group(), rig: null, on: false, atkT: 0, lunge: 0 };
 function installHero() {
   if (!RIG.hero || PH.on) return;
   const spec = { flip: 0, h: 1.78 };
@@ -5560,6 +5565,36 @@ function installHero() {
     return { g, model, mixer, acts, mats, spec };
   })();
   PH.rig = rig;
+  /* ── меч в правую руку ── */
+  (function () {
+    let hand = null;
+    rig.model.traverse((o) => { if (!hand && o.isBone && /^MiddleHandR$/i.test(o.name)) hand = o; });
+    if (!hand) rig.model.traverse((o) => { if (!hand && o.isBone && /PalmR|HandR/i.test(o.name)) hand = o; });
+    if (!hand) return;
+    rig.model.updateMatrixWorld(true);
+    const ws = new T.Vector3();
+    hand.getWorldScale(ws);
+    const k = 1 / Math.max(0.0001, ws.x);   /* переводим «мировые» единицы в локальные кости */
+    const sw = new T.Group();
+    const steel = new T.MeshStandardMaterial({ color: 0xdfe6f2, metalness: 0.75, roughness: 0.28, flatShading: true });
+    const gold = new T.MeshStandardMaterial({ color: 0xd9a72c, metalness: 0.6, roughness: 0.4, flatShading: true });
+    const dark = new T.MeshStandardMaterial({ color: 0x4a3320, roughness: 0.85, flatShading: true });
+    const blade = new T.Mesh(new T.BoxGeometry(0.085 * k, 0.82 * k, 0.026 * k), steel);
+    blade.position.y = 0.46 * k;
+    const tip = new T.Mesh(new T.ConeGeometry(0.06 * k, 0.16 * k, 4), steel);
+    tip.position.y = 0.94 * k; tip.rotation.y = Math.PI / 4;
+    const guard = new T.Mesh(new T.BoxGeometry(0.28 * k, 0.05 * k, 0.07 * k), gold);
+    guard.position.y = 0.05 * k;
+    const grip = new T.Mesh(new T.CylinderGeometry(0.03 * k, 0.03 * k, 0.22 * k, 6), dark);
+    grip.position.y = -0.07 * k;
+    const pom = new T.Mesh(new T.IcosahedronGeometry(0.045 * k, 0), gold);
+    pom.position.y = -0.19 * k;
+    sw.add(blade, tip, guard, grip, pom);
+    sw.position.set(0, 0, 0);
+    sw.rotation.set(Math.PI, 0, -0.22);   /* лезвием вверх, чуть в сторону */
+    hand.add(sw);
+    rig.sword = sw;
+  })();
   PH.g.add(rig.g);
   PH.g.position.y = 0;
   P.g.add(PH.g);
@@ -5572,10 +5607,17 @@ function heroAttackAnim() {
   if (!PH.on || !PH.rig) return;
   const a = PH.rig.acts.atk;
   if (!a) return;
-  if (PH.rig.acts.run) PH.rig.acts.run.fadeOut(0.08);
-  a.reset().setLoop(T.LoopOnce, 1).fadeIn(0.06).play();
-  a.clampWhenFinished = false;
+  const dur = a.getClip().duration || 0.8;
   PH.atkT = 0.32;
+  /* удар летит часто — не сбиваем замах на полпути, иначе выходит дёрганье */
+  if (a.isRunning() && a.time > 0.12 && a.time < dur * 0.72) return;
+  if (PH.rig.acts.run) PH.rig.acts.run.fadeOut(0.08);
+  a.reset();
+  a.timeScale = Math.min(3.0, Math.max(1, dur / 0.34));
+  a.setLoop(T.LoopOnce, 1).fadeIn(0.05).play();
+  a.clampWhenFinished = false;
+  /* выпад и разворот корпуса — удар читается даже на бегу */
+  PH.lunge = 1;
   PH.rig.mixer.addEventListener('finished', function back() {
     PH.rig.mixer.removeEventListener('finished', back);
     if (PH.rig.acts.run) PH.rig.acts.run.reset().fadeIn(0.1).play();
@@ -5969,14 +6011,15 @@ R.atkStyle = 0;
 /* росчерк удара */
 function slash(y, z, col, rot, side) {
   if (fx.length > FX_MAX * 0.9) return;
-  const g = new T.RingGeometry(0.52, 1.02, 22, 1, 0, 2.15);
+  const g = new T.RingGeometry(0.62, 1.04, 20, 1, 0, 2.3);
   const m = new T.Mesh(g, new T.MeshBasicMaterial({
-    color: col, transparent: true, side: T.DoubleSide, depthWrite: false
+    color: col, transparent: true, side: T.DoubleSide, depthWrite: false,
+    blending: T.AdditiveBlending, opacity: 0.95
   }));
-  m.position.set(R.x, y, z);
-  m.rotation.set(0.28, side * 0.55, rot);
+  m.position.set(R.x, y, z + 0.35);
+  m.rotation.set(1.05, side * 0.35, rot);
   scene.add(m);
-  fx.push({ m, ring: true, life: 0.18, t: 0, vx: 0, vy: 0.5, vz: 0.6, grow: 2.8, spin: side * 7 });
+  fx.push({ m, ring: true, life: 0.17, t: 0, vx: 0, vy: 0.2, vz: 0, grow: 2.4, spin: side * 5.5 });
   fxTrim();
 }
 
@@ -5993,15 +6036,8 @@ function hitObj(o, amount, silent) {
   o.hp -= d;
   o.flash = 1;
   if (o.rig && o.rig.acts.atk && o.hp > 0) {
-    const a = o.rig.acts.atk;
-    if (o.rig.acts.run) o.rig.acts.run.fadeOut(0.1);
-    a.reset().setLoop(T.LoopOnce, 1).fadeIn(0.08).play();
-    a.clampWhenFinished = false;
-    clearTimeout(o.atkBack);
-    o.atkBack = setTimeout(() => {
-      if (!o.rig || o.dead) return;
-      if (o.rig.acts.run) o.rig.acts.run.reset().fadeIn(0.15).play();
-    }, 520);
+    /* отдача от попадания: короткий крен назад, а не «атака» */
+    o.recoil = 1;
   }
   if (!silent) {
     R.atkStyle = (R.atkStyle + 1) % STRIKES.length;
@@ -6251,8 +6287,10 @@ function bossStrike(o) {
   /* анимация замаха босса */
   if (o.rig && o.rig.acts.atk) {
     const a = o.rig.acts.atk;
-    if (o.rig.acts.run) o.rig.acts.run.fadeOut(0.1);
-    a.reset().setLoop(T.LoopOnce, 1).fadeIn(0.08).play();
+    if (o.rig.acts.run) o.rig.acts.run.fadeOut(0.12);
+    a.reset();
+    a.timeScale = Math.min(2.2, Math.max(1, (a.getClip().duration || 1) / 0.6));
+    a.setLoop(T.LoopOnce, 1).fadeIn(0.08).play();
     a.clampWhenFinished = false;
   }
   ring(o.g.position.x, 0.9, o.z + 1.2, 0xff5a4a, true);
@@ -6805,6 +6843,20 @@ function step(dt) {
       const rs = 0.55 + (R.speed || 9) / 9 * 0.55;
       if (PH.rig.acts.run) PH.rig.acts.run.timeScale = rs;
       PH.rig.mixer.update(dt);
+      /* выпад вперёд на замахе */
+      if (PH.lunge > 0) {
+        PH.lunge = Math.max(0, PH.lunge - dt * 5.5);
+        const k = Math.sin(PH.lunge * Math.PI);
+        PH.rig.g.position.z = -k * 0.95;
+        PH.rig.g.position.y = k * 0.05;
+        PH.rig.g.rotation.y = -k * 0.4;
+        PH.rig.g.rotation.x = -k * 0.16;
+      } else {
+        PH.rig.g.position.z = 0;
+        PH.rig.g.position.y = 0;
+        PH.rig.g.rotation.y = 0;
+        PH.rig.g.rotation.x = 0;
+      }
     } else if (R.atkAnim > 0) {
       const sw = Math.sin((1 - R.atkAnim) * Math.PI);
       const sk = R.atkCur ? R.atkCur.k : 'jab';
@@ -6895,6 +6947,39 @@ function step(dt) {
           o.rig.mixer.update(dt);
           o.g.position.y = Math.abs(Math.sin(t * 6 + o.bob)) * 0.07;
           o.g.rotation.y = Math.sin(t * 2.2 + o.bob) * 0.14;
+          /* отдача от удара: моба мотнуло назад и тряхнуло */
+          if (o.recoil > 0) {
+            o.recoil = Math.max(0, o.recoil - dt * 5.5);
+            const rc = Math.sin(o.recoil * Math.PI) * o.recoil;
+            o.g.position.z = o.z + rc * 0.55;
+            o.g.position.y += rc * 0.12;
+            o.g.rotation.x = rc * 0.35;
+          } else o.g.rotation.x = 0;
+          /* моб вплотную к герою — бьёт его своей атакой */
+          if (R.on && !o.dead && o.z > -3.6 && !o.boss) {
+            o.mobAtkT = (o.mobAtkT == null ? 0.5 + Math.random() * 0.7 : o.mobAtkT) - dt;
+            if (o.mobAtkT <= 0) {
+              o.mobAtkT = 1.6 + Math.random() * 1.1;
+              const at = o.rig.acts.atk;
+              if (at && !o.dying) {
+                if (o.rig.acts.run) o.rig.acts.run.fadeOut(0.12);
+                at.reset();
+                at.timeScale = Math.min(2.4, Math.max(1, (at.getClip().duration || 0.8) / 0.5));
+                at.setLoop(T.LoopOnce, 1).fadeIn(0.08).play();
+                at.clampWhenFinished = false;
+                /* удар достаёт героя один раз — взамен «протекания» за спиной */
+                if (!o.leakUsed && R.ifrT <= 0 && Math.abs(o.g.position.x - R.x) < 0.95) {
+                  o.leakUsed = true;
+                  hurt(o.leak);
+                }
+                clearTimeout(o.atkBack);
+                o.atkBack = setTimeout(() => {
+                  if (!o.rig || o.dead) return;
+                  if (o.rig.acts.run) o.rig.acts.run.reset().fadeIn(0.15).play();
+                }, 620);
+              }
+            }
+          }
         } else {
           o.g.position.y = Math.abs(Math.sin(t * 7 + o.bob)) * 0.16;
           o.g.rotation.y = Math.sin(t * 3 + o.bob) * 0.22;
@@ -6924,7 +7009,7 @@ function step(dt) {
       }
       /* ушёл за спину: урон только при прямом контакте, мимо пробежал — без урона */
       if (o.z > 2.4) {
-        if (o.type === 'mob' && R.ifrT <= 0 && R.dashT <= 0 && Math.abs(o.g.position.x - R.x) < 0.95) hurt(o.leak);
+        if (o.type === 'mob' && !o.leakUsed && R.ifrT <= 0 && R.dashT <= 0 && Math.abs(o.g.position.x - R.x) < 0.95) { o.leakUsed = true; hurt(o.leak); }
         if (o.boss) R.bossAlive = false;
         scene.remove(o.g);
         objs.splice(i, 1);
@@ -7024,7 +7109,7 @@ loadModels().catch((e) => { console.warn('models failed, fallback primitives', e
 
 /* для отладки из консоли */
 window.__R = R; window.__objs = objs; window.__G = G; window.__S = SHOP;
-window.__RIG = RIG; window.__P = P;
+window.__RIG = RIG; window.__P = P; window.__PH = PH;
 window.__cam = camera; window.__scene = scene; window.__rend = renderer;
 window.__instRig = instRig; window.__fitModel = fitModel;
 window.__step = step; window.__addObj = addObj; window.__DF = DF; window.__hitObj = hitObj;
